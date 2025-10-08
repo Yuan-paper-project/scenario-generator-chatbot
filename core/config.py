@@ -1,0 +1,53 @@
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+import torch
+
+
+class Settings(BaseSettings):
+    #  Milvus
+    MILVUS_URI: str = "http://localhost:19530"
+    MILVUS_COLLECTION: str = "OpenAI_plain" 
+    MILVUS_TOKEN: str = ""
+
+    MISTRAL_OCR_KEY: str = ""
+    # VECTOR_DIM: int = 384
+
+    #  Embeddings
+    EMBEDDING_PROVIDER: str = "openai"  # "huggingface" or "openai"
+    EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-0.6B"
+    OPENAI_API_KEY: str | None = None
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 1536 dims; ensure matches collection
+
+    #  Device
+    DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
+    print("using device: " ,DEVICE)
+
+    #  Chunking
+    MAX_CHUNKS: int = 10  
+    CHUNK_SIZE: int = 3000
+    CHUNK_OVERLAP: int = 500
+
+    #  Ollama
+    OLLAMA_URL: str = "http://10.147.17.157:11434"
+    LLM_MODEL_NAME: str =  ""
+
+    # OpenAI
+    OPENAI_MODEL_NAME: str = "gpt-3.5-turbo"
+
+
+
+    #  LLM Response Parameters
+    LLM_PROVIDER: str = "openai"  # "ollama" or "openai"
+    LLM_TEMPERATURE: float = 0.7  # Controls creativity/randomness (0.0-1.0)
+    LLM_MAX_TOKENS: int = 4096    # Maximum response length
+    LLM_TOP_P: float = 0.9        # Nucleus sampling parameter
+    LLM_TOP_K: int = 40           # Top-k sampling parameter
+
+
+    class Config:
+        env_file = "././.env"   
+
+
+@lru_cache()
+def get_settings():
+    return Settings()

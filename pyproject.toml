@@ -1,0 +1,33 @@
+[project]
+name = "dsl-rag"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11,<3.13" 
+dependencies = [
+    "gradio>=5.49.0",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.27",
+    "langchain-core>=0.3.76",
+    "langchain-huggingface>=0.3.1",
+    "langchain-milvus>=0.2.1",
+    "langchain-ollama>=0.3.8",
+    "langchain-openai>=0.3.33",
+    "langchain-unstructured>=0.1.6",
+    "langgraph>=0.6.7",
+    "mistralai>=1.9.10",
+    "pydf>=12",
+    "torch>=2.8.0",
+    "torchaudio>=2.8.0",
+    "torchvision>=0.23.0",
+    "unstructured",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
