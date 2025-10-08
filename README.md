@@ -16,11 +16,11 @@ pip install uv
 
 In the project root directory, run:
 
-```bash
-uv pip install -r requirements.txt
+```bash 
+uv venv --python 3.11
+source .venv/bin/activate
 ```
 
-Or install all dependencies directly from `pyproject.toml`:
 
 ```bash
 uv pip install -r pyproject.toml
@@ -61,6 +61,36 @@ gr.ChatInterface(...).launch(share=True)
 ## 4. Access
 
 After running, the terminal will display a local access address (e.g., http://127.0.0.1:7860 ). Open it in your browser.
+
+## 5. Milvus & Attu Docker Network Setup
+
+To connect Attu to Milvus using Docker, follow these steps:
+
+### Step 1: Create a Docker network
+
+```bash
+docker network create rag-net
+```
+
+### Step 2: Start Milvus and Attu containers on the same network
+
+Example (adjust image tags as needed):
+
+```bash
+# Start Milvus Standalone
+docker network connect rag-net container1
+docker network connect rag-net container2
+```
+
+### Step 3: Connect Attu to Milvus
+
+When opening the Attu web page (http://localhost:8000), set the Milvus address to:
+
+```
+milvus-standalone:19530/default
+```
+
+**Note:** Use the container name (`milvus-standalone`) instead of an IP address, since both containers are on the same Docker network.
 
 ---
 

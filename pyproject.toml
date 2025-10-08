@@ -16,18 +16,8 @@ dependencies = [
     "langgraph>=0.6.7",
     "mistralai>=1.9.10",
     "pydf>=12",
-    "torch>=2.8.0",
-    "torchaudio>=2.8.0",
-    "torchvision>=0.23.0",
+    "sentence-transformers>=5.1.1",
     "unstructured",
 ]
 
-[[tool.uv.index]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu126"
-explicit = true
 
-[tool.uv.sources]
-torch = { index = "pytorch" }
-torchvision = { index = "pytorch" }
-torchaudio = { index = "pytorch" }
