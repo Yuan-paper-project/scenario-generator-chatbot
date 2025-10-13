@@ -28,7 +28,10 @@ class LLM:
             """
         self.thread_id = thread_id
         self.prompt_template = ChatPromptTemplate.from_template(self.PROMPT_TEMPLATE)
-        self.llm = init_chat_model(settings.LLM_MODEL_NAME, model_provider = settings.LLM_PROVIDER, base_url=settings.OLLAMA_URL)
+        if settings.LLM_PROVIDER == "ollama":
+            self.llm = init_chat_model(settings.LLM_MODEL_NAME, model_provider = settings.LLM_PROVIDER, base_url=settings.OLLAMA_URL)
+        else:
+            self.llm = init_chat_model(settings.LLM_MODEL_NAME, model_provider = settings.LLM_PROVIDER)
         self.workflow = StateGraph(state_schema=MessagesState)
 
         self.workflow.add_edge(START, "model")

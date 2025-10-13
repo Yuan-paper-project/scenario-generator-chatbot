@@ -18,7 +18,19 @@ In the project root directory, run:
 
 ```bash 
 uv venv --python 3.11
+
+# Activate the created virtual environment
+# On macOS / Linux
 source .venv/bin/activate
+
+# On Windows PowerShell (recommended)
+# If you see an execution policy error, run this first to allow the activation script for the current process only:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
+# Then activate:
+.\.venv\Scripts\Activate.ps1
+
+# On Windows (cmd.exe)
+.\.venv\Scripts\activate
 ```
 
 

@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     #  Embeddings
     EMBEDDING_PROVIDER: str = "openai"  # "huggingface" or "openai"
     EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-0.6B"
-    OPENAI_API_KEY: str | None = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 1536 dims; ensure matches collection
 
     #  Device
@@ -29,15 +28,15 @@ class Settings(BaseSettings):
 
     #  Ollama
     OLLAMA_URL: str = "http://10.147.17.157:11434"
-    LLM_MODEL_NAME: str =  ""
-
-    # OpenAI
-    OPENAI_MODEL_NAME: str = "gpt-3.5-turbo"
+    LLM_MODEL_NAME: str =  "gemini-2.5-flash"
 
 
+    # keys
+    OPENAI_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
 
     #  LLM Response Parameters
-    LLM_PROVIDER: str = "openai"  # "ollama" or "openai"
+    LLM_PROVIDER: str = "google_genai"  # "ollama" or "openai" or "google_genai"
     LLM_TEMPERATURE: float = 0.7  # Controls creativity/randomness (0.0-1.0)
     LLM_MAX_TOKENS: int = 4096    # Maximum response length
     LLM_TOP_P: float = 0.9        # Nucleus sampling parameter
