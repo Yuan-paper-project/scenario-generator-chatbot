@@ -1,38 +1,26 @@
 from collections.abc import Collection
 from langchain_milvus import Milvus
 from langchain.schema import Document
-from .config import get_settings
-from langchain_ollama import OllamaEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings  
+from .config import get_settings
+from .embedding import EmbeddingModel
 
 import gc
+import logging
+import time
 
 settings = get_settings()
-
-
+logger = logging.getLogger(__name__)
 
 class MilvusClient:
     def __init__(self):
-        provider = (settings.EMBEDDING_PROVIDER or "huggingface").lower()
-        if provider == "openai":
-            print("Using OpenAI embeddings")
-            if OpenAIEmbeddings is None:
-                raise ImportError("langchain-openai is not installed. Please install langchain-openai and openai dependencies.")
-            if not settings.OPENAI_API_KEY:
-                raise ValueError("No OPENAI_API_KEY. Please set it in the environment variables or .env file.")
-            self.embedding = OpenAIEmbeddings(
-                api_key=settings.OPENAI_API_KEY,
-                model=settings.OPENAI_EMBEDDING_MODEL,
-            )
-        else:
-            print("Using HuggingFace embeddings")
-            self.embedding = HuggingFaceEmbeddings(
-                model=settings.EMBEDDING_MODEL,
-                model_kwargs={"device": settings.DEVICE},
-                encode_kwargs={"normalize_embeddings": True},
-            )
+        try:
+            self.embedding_model = EmbeddingModel()
+            logger.info(f"Using {self.embedding_model.provider} embeddings")
+            self.embedding = self.embedding_model.embedding
+        except Exception as e:
+            logger.error(f"Failed to initialize embedding model: {e}")
+            raise
 
         self.vector_store = Milvus(
             collection_name=settings.MILVUS_COLLECTION,
@@ -60,18 +48,28 @@ class MilvusClient:
         self.vector_store.delete(ids)
 
     def close(self):
+        """
+        Clean up resources used by the MilvusClient
+        """
         try:
+            # Clean up vector store
             if hasattr(self.vector_store, 'client') and hasattr(self.vector_store.client, 'close'):
                 self.vector_store.client.close()
             
-            if hasattr(self.embedding, 'client') and hasattr(self.embedding.client, 'model'):
-                del self.embedding.client.model
-
+            # Clean up embedding model
+            if self.embedding_model:
+                self.embedding_model.close()
+            
+            # Clear references
+            self.embedding_model = None
             self.embedding = None
             self.vector_store = None
             self.text_splitter = None
             
+            # Force garbage collection
             gc.collect()
             
+            logger.info("Successfully cleaned up MilvusClient resources")
+            
         except Exception as e:
-            print(f"❌ Error during MilvusClient cleanup: {e}")
+            logger.error(f"Error during MilvusClient cleanup: {e}")
