@@ -1,33 +1,49 @@
-import sys
+import gradio as gr
+from core.milvus_client import MilvusClient
+from core.llm import LLM
+import torch
 
-from core.graph import build_app
+class ChatbotApp:
+    def __init__(self):
+        self.milvus_client = MilvusClient()
+        self.llm = LLM(thread_id="test-123")
 
+    def respond(self, query, history):
+        # Get relevant documents
+        docs = self.milvus_client.search(query)
+        context = "\n\n".join([doc.page_content for doc in docs])
+        print(f"Retrieved {len(docs)} documents for context.")
+        # context=''
+        self.llm.inject_prompt_and_context(
+            system_prompt="",
+            context=context
+        )
 
-def main():
-    app = build_app()
+        print("Context is ready, calling LLM...")
+        response = self.llm.chat(query)
 
-    print("Please describe the scenario: ")
+        return response
 
-    while True:
+    def close(self):
+        if hasattr(self, "milvus_client") and self.milvus_client:
+            self.milvus_client.close()
+        if hasattr(self, "llm") and self.llm and hasattr(self.llm, "close"):
+            self.llm.close()
+
         try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("Bye")
-            break
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
 
-        if not user_input:
-            continue
-
-        if user_input.lower() == "/exit":
-            print("Bye")
-            break
-
-        state = {"question": user_input}
-
-        result = app.invoke(state)
-        answer = result.get("answer", "No answer generated.")
-        print(f"Assistant: {answer}\n")
-
-
+        
 if __name__ == "__main__":
-    main()
+    app = ChatbotApp()
+    try:
+        gr.ChatInterface(
+            fn=app.respond,
+            title="Chatbot",
+            description="Chatbot for generating DSL ",
+        ).launch()
+    finally:
+        app.close()

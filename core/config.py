@@ -6,16 +6,16 @@ import torch
 class Settings(BaseSettings):
     #  Milvus
     MILVUS_URI: str = "http://localhost:19530"
-    MILVUS_COLLECTION: str = "OpenAI_plain" 
+    MILVUS_COLLECTION: str = "gemini" 
     MILVUS_TOKEN: str = ""
 
     MISTRAL_OCR_KEY: str = ""
     # VECTOR_DIM: int = 384
 
     #  Embeddings
-    EMBEDDING_PROVIDER: str = "openai"  # "huggingface" or "openai"
-    EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-0.6B"
-    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 1536 dims; ensure matches collection
+    EMBEDDING_PROVIDER: str = "google_genai"  # "huggingface" or "openai", "google_genai"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    # OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 1536 dims; ensure matches collection
 
     #  Device
     DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
