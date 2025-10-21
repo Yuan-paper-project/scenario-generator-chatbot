@@ -6,43 +6,23 @@ import torch
 class ChatbotApp:
     def __init__(self):
         self.milvus_client = MilvusClient()
-        self.llm = LLM()
-        self.memory_size = 5  # Keep last 5 exchanges
-        self.conversation_memory = []
+        self.llm = LLM(thread_id="test-123")
 
-    def respond(self, message, history):
-        # Update conversation memory
-        if history:
-            self.conversation_memory = history[-self.memory_size:]
-        
-        # Format conversation history
-        conversation_context = "\n".join([
-            f"Human: {h[0]}\nAssistant: {h[1]}" 
-            for h in self.conversation_memory
-        ])
-        
+    def respond(self, query, history):
         # Get relevant documents
-        docs = self.milvus_client.search(message)
-        doc_context = "\n\n".join([doc.page_content for doc in docs])
-        
-        # Combine both contexts
-        full_context = f"""Previous Conversation:
-                {conversation_context}
-
-                Relevant Documentation:
-                {doc_context}"""
-
-
+        docs = self.milvus_client.search(query)
+        context = "\n\n".join([doc.page_content for doc in docs])
+        print(f"Retrieved {len(docs)} documents for context.")
+        # context=''
+        self.llm.inject_prompt_and_context(
+            system_prompt="",
+            context=context
+        )
 
         print("Context is ready, calling LLM...")
-        answer = self.llm.generate_response(context=full_context, question=message)
-        
-        # Update memory with current exchange
-        self.conversation_memory.append((message, answer))
-        if len(self.conversation_memory) > self.memory_size:
-            self.conversation_memory.pop(0)
-            
-        return answer
+        response = self.llm.chat(query)
+
+        return response
 
     def close(self):
         if hasattr(self, "milvus_client") and self.milvus_client:
@@ -64,8 +44,6 @@ if __name__ == "__main__":
             fn=app.respond,
             title="Chatbot",
             description="Chatbot for generating DSL ",
-            # type="messages",
-            # save_history=True
         ).launch()
     finally:
         app.close()

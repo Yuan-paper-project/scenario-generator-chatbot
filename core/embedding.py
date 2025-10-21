@@ -59,30 +59,6 @@ class EmbeddingModel:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize {self.provider} embedding model: {str(e)}")
 
-    def encode(self, text: str) -> list[float]:
-        """
-        Encode the input text into embedding vectors.
-        
-        Args:
-            text (str): The input text to be encoded
-            
-        Returns:
-            list[float]: The embedding vector
-        """
-        return self.embedding.embed_query(text)
-
-    def encode_batch(self, texts: list[str]) -> list[list[float]]:
-        """
-        Encode a batch of texts into embedding vectors.
-        
-        Args:
-            texts (list[str]): A list of input texts to be encoded
-            
-        Returns:
-            list[list[float]]: A list of embedding vectors
-        """
-        return self.embedding.embed_documents(texts)
-
     def close(self):
         """
         Clean up resources used by the embedding model
@@ -94,5 +70,3 @@ class EmbeddingModel:
                 del self.embedding.client.model
         self.embedding = None
 
-    def encode(self, text: str) -> list[float]:
-        return self.embedding.embed_query(text)
