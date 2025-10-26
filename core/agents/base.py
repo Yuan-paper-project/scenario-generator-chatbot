@@ -1,0 +1,57 @@
+from abc import ABC, abstractmethod
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models import init_chat_model
+from typing import Any, Dict
+from typing import Optional
+
+from core.config import get_settings
+from core.prompts import load_prompt
+from core.milvus_client import MilvusClient
+
+settings = get_settings()
+
+
+class BaseAgent(ABC):
+    
+    def __init__(self, prompt_template: str, model_name: str = None, model_provider: str = None, use_rag: bool = False):
+        self.prompt_template = ChatPromptTemplate.from_template(prompt_template)
+        self.model_name = model_name or settings.LLM_MODEL_NAME
+        self.model_provider = model_provider or settings.LLM_PROVIDER
+        
+        if self.model_provider == "ollama":
+            self.llm = init_chat_model(
+                self.model_name, 
+                model_provider=self.model_provider, 
+                base_url=settings.OLLAMA_URL
+            )
+        else:
+            self.llm = init_chat_model(self.model_name, model_provider=self.model_provider)
+    
+        self.vector_store = MilvusClient() if use_rag else None
+
+    @abstractmethod
+    def process(self, **kwargs) -> Any:
+        """Process the task and return result."""
+        pass
+    
+    def invoke(self, context: Dict = None) -> str:
+        formatted_prompt = self.prompt_template.format(**context) 
+
+        retrieved_context = self.retrieve_context(formatted_prompt)
+
+        if retrieved_context:
+            formatted_prompt += f"\n\nRelevant Context:\n{retrieved_context}"
+        
+        print(f"Invoking LLM with prompt:\n{formatted_prompt}\n")
+        response = self.llm.invoke([HumanMessage(content=formatted_prompt)])
+        return response.content
+
+    def retrieve_context(self, query: str) -> Optional[str]:
+        """Retrieve relevant context from vector store."""
+        if not self.vector_store:
+            return None
+        results = self.vector_store.search(query)
+        return "\n".join([doc.page_content for doc in results]) if results else None
+
+

@@ -45,3 +45,24 @@ This document summarizes recent research and frameworks for scenario generation 
 
 ---
 
+## 6. LinguaSim: Hierarchical Language Model for Scenario Generation
+- **Architecture:**
+  1. Five-Layer Scenario Structure:
+     - Environment Layer: Weather, time, lighting conditions
+     - Ego Layer: Main vehicle configuration and behaviors
+     - Adversarial Layer: Critical interactive agents
+     - Traffic Layer: Background traffic participants
+  2. Action Generator Components:
+     - Agent Configuration: Detailed setup of agent
+     - Agent Choice Selection: Decision-making for agent 
+     - Failure/Success Conditions: Scenario outcome criteria
+  3. Agent Refinement:
+     - Iterative improvement of agent behaviors
+     - Fine-tuning based on simulation feedback
+- **Key Features:**
+  - Hierarchical decomposition of scenario elements
+  - Structured action generation pipeline
+  - Adaptive agent behavior refinement
+
+---
+

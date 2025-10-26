@@ -1,0 +1,13 @@
+The following Scenic DSL code you generated has errors:
+
+Generated Code:
+```
+{dsl_code}
+```
+
+Error Message:
+{error_message}
+
+Please fix the errors and regenerate valid Scenic DSL code. 
+Output only the corrected Scenic program in one fenced code block. No prose or explanations.
+
