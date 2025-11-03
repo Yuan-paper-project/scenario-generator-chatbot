@@ -1,0 +1,30 @@
+Based on the following scenario interpretation:
+{interpretation}
+
+Previously assembled code (for reference):
+{previous_assembled_code}
+
+Generate Scenic DSL code snippet that defines the ego vehicle setup.
+
+1. Use the variable `ego` to define the ego vehicle.
+2. Use the previously defined egoSpawnPt as position
+3. Set regionContainedIn to None
+4. Use EGO_MODEL as blueprint
+5. If scenario involves intersection, add distance constraint (require statement)
+
+
+Output format: Only output ego definition code without any explanations.
+
+Code example reference:
+ego = Car at egoSpawnPt,
+    with regionContainedIn None,
+    with blueprint EGO_MODEL
+require 10 <= (distance to intersection) <= 40
+
+ego = Car at egoSpawnPt,
+    with heading yaw,
+    with regionContainedIn None,
+    with blueprint EGO_MODEL
+
+
+

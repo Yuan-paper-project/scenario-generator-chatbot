@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     print("using device: " ,DEVICE)
 
     #  Chunking
-    MAX_CHUNKS: int = 10  
+    MAX_CHUNKS: int = 5  
     CHUNK_SIZE: int = 3000
     CHUNK_OVERLAP: int = 500
 

@@ -1,0 +1,29 @@
+Based on the following scenario interpretation:
+{interpretation}
+
+Previously assembled code (for reference):
+{previous_assembled_code}
+
+Generate Scenic DSL code snippet that defines the road environment where the scenario happens.
+
+Output ONLY the road/environment-related Scenic code in a code block. No prose or explanations.
+Generate code that can be directly integrated into a Scenic scenario.
+
+Code example reference:
+
+Code example reference (adjacent lane scenario):
+laneSecsWithRightLane = []
+for lane in network.lanes:
+    for laneSec in lane.sections:
+        if laneSec._laneToRight is not None and laneSec._laneToRight.isForward == laneSec.isForward:
+            laneSecsWithRightLane.append(laneSec)
+egoLaneSec = Uniform(*laneSecsWithRightLane)
+egoSpawnPt = OrientedPoint in egoLaneSec.centerline
+
+Code example reference (intersection scenario):
+intersection = Uniform(*filter(lambda i: i.is4Way and not i.isSignalized, network.intersections))
+egoInitLane = Uniform(*intersection.incomingLanes)
+egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, egoInitLane.maneuvers))
+egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
+egoSpawnPt = OrientedPoint in egoManeuver.startLane.centerline
+

@@ -1,0 +1,33 @@
+Based on the following scenario interpretation:
+{interpretation}
+
+Previously assembled code (for reference):
+{previous_assembled_code}
+
+Generate Scenic DSL code snippet that defines behaviors for the ego vehicle and adversarial objects, and define the parameters for the behavior.
+
+Output ONLY the behavior-related Scenic code in a code block. No prose or explanations.
+Generate code that can be directly integrated into a Scenic scenario.
+
+Code example reference:
+```
+param OPT_ADV_SPEED = Range(0, 5)
+param OPT_ADV_DISTANCE = Range(0, 15)
+param OPT_STOP_DISTANCE = Range(0, 1)
+
+behavior AdvBehavior():
+    do CrossingBehavior(ego, OPT_ADV_SPEED, OPT_ADV_DISTANCE)
+        until (distance from self to egoTrajectory) < OPT_STOP_DISTANCE
+    while True:
+        take SetWalkingSpeedAction(0)
+```
+
+```
+behavior AdvBehavior():
+    do CrossingBehavior(ego, OPT_ADV_SPEED, OPT_ADV_DISTANCE) until (distance from self to egoTrajectory) < OPT_STOP_DISTANCE
+    while True:
+        take SetWalkingSpeedAction(0)
+param OPT_ADV_SPEED = Range(0, 5)
+param OPT_ADV_DISTANCE = Range(0, 15)
+param OPT_STOP_DISTANCE = Range(0, 1)
+```
