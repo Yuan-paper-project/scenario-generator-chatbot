@@ -1,8 +1,6 @@
 from pathlib import Path
-import os
 
 _PROMPTS_DIR = Path(__file__).parent
-
 
 def load_prompt(prompt_name: str) -> str:
     prompt_file = _PROMPTS_DIR / f"{prompt_name}.txt"
@@ -17,6 +15,14 @@ def load_prompt(prompt_name: str) -> str:
         return f.read().strip()
 
 
+def get_available_prompts() -> list[str]:
+    return [
+        f.stem 
+        for f in _PROMPTS_DIR.glob("*.txt")
+        if f.is_file()
+    ]
+
 
 __all__ = ["load_prompt"]
+
 

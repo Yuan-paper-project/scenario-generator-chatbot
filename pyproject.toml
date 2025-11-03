@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.11,<3.13" 
 dependencies = [
     "gradio>=5.49.0",
+    "grandalf>=0.8",
     "langchain>=0.3.27",
     "langchain-community>=0.3.27",
     "langchain-core>=0.3.76",

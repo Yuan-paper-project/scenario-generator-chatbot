@@ -33,7 +33,7 @@ pip install uv
 
 # Create and activate virtual environment
 uv venv --python 3.11
-.\.venv\Scripts\Activate.ps1  # Windows PowerShell
+.\.venv\Scripts\activate  # Windows PowerShell
 source .venv/bin/activate     # macOS/Linux
 
 # Install dependencies
