@@ -17,11 +17,6 @@ Output format: Only output ego definition code without any explanations.
 
 Code example reference:
 ego = Car at egoSpawnPt,
-    with regionContainedIn None,
-    with blueprint EGO_MODEL
-require 10 <= (distance to intersection) <= 40
-
-ego = Car at egoSpawnPt,
     with heading yaw,
     with regionContainedIn None,
     with blueprint EGO_MODEL

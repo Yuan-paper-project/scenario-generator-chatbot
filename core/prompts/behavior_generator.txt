@@ -21,13 +21,3 @@ behavior AdvBehavior():
     while True:
         take SetWalkingSpeedAction(0)
 ```
-
-```
-behavior AdvBehavior():
-    do CrossingBehavior(ego, OPT_ADV_SPEED, OPT_ADV_DISTANCE) until (distance from self to egoTrajectory) < OPT_STOP_DISTANCE
-    while True:
-        take SetWalkingSpeedAction(0)
-param OPT_ADV_SPEED = Range(0, 5)
-param OPT_ADV_DISTANCE = Range(0, 15)
-param OPT_STOP_DISTANCE = Range(0, 1)
-```

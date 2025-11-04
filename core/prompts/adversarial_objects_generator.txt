@@ -10,7 +10,6 @@ Output ONLY the adversarial objects setup Scenic code in a code block. No prose 
 Generate code that can be directly integrated into a Scenic scenario.
 
 Code example reference:
-1. Leading vehicle
 ```scenic
 param OPT_LEADING_DISTANCE = Range(0, 30)
 param OPT_LEADING_SPEED = Range(1, 5)
@@ -18,16 +17,5 @@ LeadingSpawnPt = OrientedPoint following roadDirection from egoSpawnPt for globa
 LeadingAgent = Car at LeadingSpawnPt,
     with behavior FollowLaneBehavior(target_speed=globalParameters.OPT_LEADING_SPEED)
 ```
-2. Adversarial vehicle in adjacent lane
-```scenic
-param OPT_GEO_Y_DISTANCE = Range(0, 30)
-advLane = network.laneSectionAt(ego)._laneToRight.lane
-IntSpawnPt = OrientedPoint following roadDirection from egoSpawnPt for globalParameters.OPT_GEO_Y_DISTANCE
-projectPt = Vector(*advLane.centerline.project(IntSpawnPt.position).coords[0])
-advHeading = advLane.orientation[projectPt]
-AdvAgent = Car at projectPt,
-    with heading advHeading,
-    with regionContainedIn None,
-    with behavior AdvBehavior()
-```
+
 
