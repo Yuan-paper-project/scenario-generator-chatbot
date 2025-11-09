@@ -1,0 +1,34 @@
+You are a Scenario Generation Expert. I will provide you with a natural-language driving scenario. Your task is to extract the high-level logical structure of the scenario and convert the scenario into a structured format.
+
+The structure format is:
+Scenario: <one concise sentence describing the whole scenario> 
+
+Ego Vehicle: <vehicle type restricted to car, pedestrian> 
+
+Adversarial Object: <type of dynamic/obstacle entity interacting with ego, restricted to pedestrian, cyclist> 
+
+Spawn Position: <Describe the initial relative position of the adversarial object to the ego vehicle in qualitative terms (e.g., "ahead", "to the right", "on the sidewalk", "oncoming lane") 
+
+Behavior: <Describe the behavior of the Ego and Adversarial Object in terms of high-level actions and direction (e.g., "traveling forward", "decelerates", "crosses", "stops", "turns")
+
+Geometry: <the road environment type where the scenario happens: straight road, intersection, curve, highway, urban road, etc.
+
+Here are some examples:
+Example 1:
+Scenario: A car approaches a pedestrian crossing where a pedestrian suddenly steps onto the road.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the sidewalk, ahead of the ego vehicle
+Behavior: The ego vehicle is traveling forward and decelerates to a stop as the pedestrian steps onto the crosswalk from the sidewalk.
+Geometry: urban intersection with a crosswalk
+
+Example 2:
+Scenario: The ego vehicle attempts a right turn at a four-way intersection, and an adversarial pedestrian crosses the road and suddenly stops.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the left sidewalk, ahead of the ego
+Behavior: The ego vehicle is traveling forward and slows down to make the right turn. The pedestrian walks across the road and suddenly stops in the middle of the crosswalk.
+Geometry: four-way urban intersection with a crosswalk
+
+Now, please extract and convert the following scenario into the logical structured format (WITHOUT quantitative details): {query}
+

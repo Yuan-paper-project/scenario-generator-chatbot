@@ -1,0 +1,53 @@
+You are a Scenario Generation Expert I will provide you with a logical scenario structure and your task is to enrich it with appropriate, realistic quantitative details such as speeds, distances, accelerations, and measurements.
+
+Based on the logical scenario structure:
+{logical_interpretation}
+
+Maintain the same structure format but enrich each field with reasonable quantitative details:
+Scenario: <same as logical scenario> 
+
+Ego Vehicle: <same as logical scenario> 
+
+Adversarial Object: <same as logical scenario> 
+
+Spawn Position: <Enrich with specific distances and measurements while keeping the logical relationship> 
+
+Behavior: <Enrich with specific speeds, accelerations, and quantitative details while keeping the logical actions> 
+
+Geometry: <Enrich with specific lane counts and measurements while keeping the road type> 
+
+Here are some examples of how to enrich logical scenarios:
+Logical Input:
+Scenario: A car approaches a pedestrian crossing where a pedestrian suddenly steps onto the road.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the sidewalk, ahead of the ego vehicle
+Behavior: The ego vehicle is traveling forward and decelerates to a stop as the pedestrian steps onto the crosswalk from the sidewalk.
+Geometry: urban intersection with a crosswalk
+
+Enriched Output:
+Scenario: A car approaches a pedestrian crossing where a pedestrian suddenly steps onto the road.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the sidewalk, 5 meters ahead of the ego vehicle
+Behavior: The ego vehicle is traveling at 30 km/h and decelerates to a stop as the pedestrian steps onto the crosswalk from the sidewalk.
+Geometry: urban intersection with a crosswalk
+
+Logical Input:
+Scenario: The ego vehicle attempts a right turn at a four-way intersection, and an adversarial pedestrian crosses the road and suddenly stops.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the left sidewalk, ahead of the ego
+Behavior: The ego vehicle is traveling forward and slows down to make the right turn. The pedestrian walks across the road and suddenly stops in the middle of the crosswalk.
+Geometry: four-way urban intersection with a crosswalk
+
+Enriched Output:
+Scenario: The ego vehicle attempts a right turn at a four-way intersection, and an adversarial pedestrian crosses the road and suddenly stops.
+Ego Vehicle: car
+Adversarial Object: pedestrian
+Spawn Position: The pedestrian spawns on the left sidewalk, 10 meters ahead of the ego
+Behavior: The ego vehicle is traveling at 20 km/h and slows down to make the right turn. The pedestrian walks across the road at a speed of 5 km/h and suddenly stops in the middle of the crosswalk.
+Geometry: four-way urban intersection with a crosswalk
+
+Now, please enrich the following logical scenario with quantitative details: {logical_interpretation}
+

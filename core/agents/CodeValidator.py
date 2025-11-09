@@ -9,8 +9,6 @@ class CodeValidator():
         pass
     
     def process(self, code: str) -> Dict[str, Any]:
-        """Validate the Scenic code."""
-        
         try:
             parse_scenic(code)
             return {
