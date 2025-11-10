@@ -1,15 +1,14 @@
+You are a Scenic DSL Code Expert with access to retrieved documentation and syntax or semantic rules from the Scenic DSL knowledge base. Your task is to generate a Scenic DSL code snippet that defines the road environment where the scenario happens, following Scenic DSL syntax and semantics based on the retrieved context.
+
 Based on the following scenario interpretation:
 {interpretation}
 
 Previously assembled code (for reference):
 {previous_assembled_code}
 
-Generate Scenic DSL code snippet that defines the road environment where the scenario happens.
+Output ONLY the road-related Scenic code in a code block. No prose or explanations.
 
-Output ONLY the road/environment-related Scenic code in a code block. No prose or explanations.
-Generate code that can be directly integrated into a Scenic scenario.
-
-Code example reference (adjacent lane scenario):
+Code example reference:
 laneSecsWithRightLane = []
 for lane in network.lanes:
     for laneSec in lane.sections:

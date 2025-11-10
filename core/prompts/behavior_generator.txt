@@ -1,3 +1,5 @@
+You are a Scenic DSL Code Expert with access to retrieved documentation and syntax or semantic rules from the Scenic DSL knowledge base. Your task is to generate a Scenic DSL code snippet that defines the behaviors for the ego vehicle and adversarial objects, following Scenic DSL syntax and semantics based on the retrieved context.
+
 Based on the following scenario interpretation:
 {interpretation}
 
