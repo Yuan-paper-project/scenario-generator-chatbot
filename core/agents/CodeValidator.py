@@ -33,9 +33,7 @@ class CodeValidator():
             return result
     
     def get_last_formatted_prompt(self) -> Optional[str]:
-        """Get the last formatted prompt used."""
         return self.last_formatted_prompt
     
     def get_last_response(self) -> Optional[str]:
-        """Get the last response."""
         return self.last_response

@@ -10,6 +10,7 @@ from .agents.DetailEnricher import DetailEnricher
 from .agents.FeedbackHandler import FeedbackHandler
 from .agents.CodeGenerator import CodeGenerator
 from .agents.CodeValidator import CodeValidator
+from .agents.CodeVerifier import CodeVerifier
 from .agents.ErrorCorrector import ErrorCorrector
 from .agents.HeaderGenerator import HeaderGenerator
 from .agents.RoadGenerator import RoadGenerator
@@ -26,7 +27,7 @@ class WorkflowState(TypedDict):
     logical_interpretation: str
     interpretation: str
     user_feedback: str
-    confirmation_status: str  # "pending_logical", "pending_detailed", "confirmed_logical", "confirmed_detailed", "processing"
+    confirmation_status: str
     header_code: str
     road_code: str
     ego_vehicle_code: str
@@ -35,7 +36,8 @@ class WorkflowState(TypedDict):
     generated_code: str
     validation_result: dict
     retry_count: int
-    workflow_status: str  # "waiting_logical_confirmation", "waiting_detailed_confirmation", "completed", "error"
+    workflow_status: str
+    current_component_type: str
 
 
 class AgentWorkflow:
@@ -50,6 +52,7 @@ class AgentWorkflow:
         self.detail_enricher = DetailEnricher()
         self.feedback_handler = FeedbackHandler()
         self.validator = CodeValidator()
+        self.code_verifier = CodeVerifier()
         self.error_corrector = ErrorCorrector()
         self.header_generator = HeaderGenerator()
         self.road_generator = RoadGenerator()
@@ -67,6 +70,7 @@ class AgentWorkflow:
         self.workflow.add_node("header_generation", self._header_generation_node)
         self.workflow.add_node("assemble_header", self._assemble_header_node)
         self.workflow.add_node("road_generation", self._road_generation_node)
+        self.workflow.add_node("verify_code", self._verify_code_node)
         self.workflow.add_node("assemble_road", self._assemble_road_node)
         self.workflow.add_node("ego_vehicle_setup", self._ego_vehicle_setup_node)
         self.workflow.add_node("assemble_ego", self._assemble_ego_node)
@@ -117,13 +121,17 @@ class AgentWorkflow:
         self.workflow.add_edge("handle_detailed_feedback", "detail_enrichment")
         self.workflow.add_edge("header_generation", "assemble_header")
         self.workflow.add_edge("assemble_header", "road_generation")
-        self.workflow.add_edge("road_generation", "assemble_road")
+        
+        self.workflow.add_edge("road_generation", "verify_code")
+        self.workflow.add_edge("verify_code", "assemble_road")
         self.workflow.add_edge("assemble_road", "ego_vehicle_setup")
-        self.workflow.add_edge("ego_vehicle_setup", "assemble_ego")
+        self.workflow.add_edge("ego_vehicle_setup", "verify_code")
         self.workflow.add_edge("assemble_ego", "adversarial_objects_generation")
-        self.workflow.add_edge("adversarial_objects_generation", "assemble_adversarial")
+        self.workflow.add_edge("adversarial_objects_generation", "verify_code")
+        self.workflow.add_edge("verify_code", "assemble_adversarial")
         self.workflow.add_edge("assemble_adversarial", "behavior_generation")
-        self.workflow.add_edge("behavior_generation", "assemble_behavior")
+        self.workflow.add_edge("behavior_generation", "verify_code")
+        self.workflow.add_edge("verify_code", "assemble_behavior")
         self.workflow.add_edge("assemble_behavior", "validate")
         
         self.workflow.add_conditional_edges(
@@ -318,7 +326,8 @@ class AgentWorkflow:
         road_code = self.road_generator.process(interpretation, previous_assembled)
         
         new_state = {
-            "road_code": road_code
+            "road_code": road_code,
+            "current_component_type": "road"
         }
         
         if self.logger:
@@ -356,14 +365,14 @@ class AgentWorkflow:
         ego_vehicle_code = self.ego_vehicle_setup.process(interpretation, previous_assembled)
         
         new_state = {
-            "ego_vehicle_code": ego_vehicle_code
+            "ego_vehicle_code": ego_vehicle_code,
+            "current_component_type": "ego_vehicle"
         }
         
         if self.logger:
             formatted_prompt = self.ego_vehicle_setup.get_last_formatted_prompt() or "No prompt available"
             response = self.ego_vehicle_setup.get_last_response() or "No response available"
             self.logger.log_step("ego_vehicle_setup", formatted_prompt, response)
-        
         return new_state
 
     def _assemble_ego_node(self, state: WorkflowState) -> WorkflowState:
@@ -394,7 +403,8 @@ class AgentWorkflow:
         adversarial_objects_code = self.adversarial_objects_generator.process(interpretation, previous_assembled)
         
         new_state = {
-            "adversarial_objects_code": adversarial_objects_code
+            "adversarial_objects_code": adversarial_objects_code,
+            "current_component_type": "adversarial_objects"
         }
         
         if self.logger:
@@ -432,7 +442,8 @@ class AgentWorkflow:
         behavior_code = self.behavior_generator.process(interpretation, previous_assembled)
         
         new_state = {
-            "behavior_code": behavior_code
+            "behavior_code": behavior_code,
+            "current_component_type": "behavior"
         }
         
         if self.logger:
@@ -441,6 +452,42 @@ class AgentWorkflow:
             self.logger.log_step("behavior_generation", formatted_prompt, response)
         
         return new_state
+
+    def _verify_code_node(self, state: WorkflowState) -> WorkflowState:
+        interpretation = state.get("interpretation", "")
+        previous_assembled = state.get("generated_code", "")
+        component_type = state.get("current_component_type", "")
+        
+        code_map = {
+            "road": "road_code",
+            "ego_vehicle": "ego_vehicle_code",
+            "adversarial_objects": "adversarial_objects_code",
+            "behavior": "behavior_code"
+        }
+        
+        code_key = code_map.get(component_type, "")
+        code = state.get(code_key, "")
+        
+        
+        verification = self.code_verifier.process(
+            interpretation=interpretation,
+            new_code=code,
+            previous_code=previous_assembled,
+            component_type=component_type
+        )
+        
+        if verification["satisfied"]:
+            print(f"✅ {component_type} code verification: SATISFIED")
+        else:
+            print(f"⚠️ {component_type} code verification: NOT SATISFIED")
+            print(verification["suggestions"])
+        
+        if self.logger:
+            formatted_prompt = self.code_verifier.get_last_formatted_prompt() or "No prompt available"
+            response = self.code_verifier.get_last_response() or "No response available"
+            self.logger.log_step(f"verify_{component_type}", formatted_prompt, response)
+        
+        return {}
 
     def _assemble_behavior_node(self, state: WorkflowState) -> WorkflowState:
         behavior_code = state.get("behavior_code", "")
