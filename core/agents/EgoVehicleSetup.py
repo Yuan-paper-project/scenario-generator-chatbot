@@ -10,10 +10,11 @@ class EgoVehicleSetup(BaseAgent):
         super().__init__(prompt, use_rag=True)
     
     def process(self, interpretation: str, previous_assembled_code: str = "") -> str:
-        response = self.invoke(context={
+        context = {
             "interpretation": interpretation,
             "previous_assembled_code": previous_assembled_code or "No previous code"
-        })
+        }
+        response = self.invoke(context=context)
         return self._extract_code_from_response(response)
     
     def _extract_code_from_response(self, response: str) -> str:

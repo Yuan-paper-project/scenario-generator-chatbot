@@ -1,0 +1,16 @@
+You are a Scenic DSL Code Refinement Expert. Your task is to improve the current code snippet by fixing the issues mentioned in the verification suggestions. You should also ensure that the refined code is compatible with the scenario interpretation and the previously assembled code.
+
+Scenario Interpretation:
+{interpretation}
+
+Previously Assembled Code:
+{previous_code}
+
+Current Code Snippet (Component: {component_type}):
+{original_code}
+
+Verification Suggestions:
+{suggestions}
+
+Output ONLY the refined code snippet in a code block. No explanations or prose.
+

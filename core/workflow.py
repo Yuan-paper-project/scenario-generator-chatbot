@@ -11,6 +11,7 @@ from .agents.FeedbackHandler import FeedbackHandler
 from .agents.CodeGenerator import CodeGenerator
 from .agents.CodeValidator import CodeValidator
 from .agents.CodeVerifier import CodeVerifier
+from .agents.CodeRefiner import CodeRefiner
 from .agents.ErrorCorrector import ErrorCorrector
 from .agents.HeaderGenerator import HeaderGenerator
 from .agents.RoadGenerator import RoadGenerator
@@ -38,6 +39,9 @@ class WorkflowState(TypedDict):
     retry_count: int
     workflow_status: str
     current_component_type: str
+    verification_satisfied: bool
+    verification_suggestions: str
+    component_retry_count: int
 
 
 class AgentWorkflow:
@@ -53,6 +57,7 @@ class AgentWorkflow:
         self.feedback_handler = FeedbackHandler()
         self.validator = CodeValidator()
         self.code_verifier = CodeVerifier()
+        self.code_refiner = CodeRefiner()
         self.error_corrector = ErrorCorrector()
         self.header_generator = HeaderGenerator()
         self.road_generator = RoadGenerator()
@@ -71,6 +76,7 @@ class AgentWorkflow:
         self.workflow.add_node("assemble_header", self._assemble_header_node)
         self.workflow.add_node("road_generation", self._road_generation_node)
         self.workflow.add_node("verify_code", self._verify_code_node)
+        self.workflow.add_node("refine_code", self._refine_code_node)
         self.workflow.add_node("assemble_road", self._assemble_road_node)
         self.workflow.add_node("ego_vehicle_setup", self._ego_vehicle_setup_node)
         self.workflow.add_node("assemble_ego", self._assemble_ego_node)
@@ -121,17 +127,28 @@ class AgentWorkflow:
         self.workflow.add_edge("handle_detailed_feedback", "detail_enrichment")
         self.workflow.add_edge("header_generation", "assemble_header")
         self.workflow.add_edge("assemble_header", "road_generation")
-        
         self.workflow.add_edge("road_generation", "verify_code")
-        self.workflow.add_edge("verify_code", "assemble_road")
+        
+        self.workflow.add_conditional_edges(
+            "verify_code",
+            self._check_verification_result,
+            {
+                "assemble_road": "assemble_road",
+                "assemble_ego": "assemble_ego",
+                "assemble_adversarial": "assemble_adversarial",
+                "assemble_behavior": "assemble_behavior",
+                "refine": "refine_code"
+            }
+        )
+        
+        self.workflow.add_edge("refine_code", "verify_code")
+        
         self.workflow.add_edge("assemble_road", "ego_vehicle_setup")
         self.workflow.add_edge("ego_vehicle_setup", "verify_code")
         self.workflow.add_edge("assemble_ego", "adversarial_objects_generation")
         self.workflow.add_edge("adversarial_objects_generation", "verify_code")
-        self.workflow.add_edge("verify_code", "assemble_adversarial")
         self.workflow.add_edge("assemble_adversarial", "behavior_generation")
         self.workflow.add_edge("behavior_generation", "verify_code")
-        self.workflow.add_edge("verify_code", "assemble_behavior")
         self.workflow.add_edge("assemble_behavior", "validate")
         
         self.workflow.add_conditional_edges(
@@ -440,7 +457,7 @@ class AgentWorkflow:
         previous_assembled = state.get("generated_code", "")
         
         behavior_code = self.behavior_generator.process(interpretation, previous_assembled)
-        
+
         new_state = {
             "behavior_code": behavior_code,
             "current_component_type": "behavior"
@@ -457,6 +474,7 @@ class AgentWorkflow:
         interpretation = state.get("interpretation", "")
         previous_assembled = state.get("generated_code", "")
         component_type = state.get("current_component_type", "")
+        component_retry_count = state.get("component_retry_count", 0)
         
         code_map = {
             "road": "road_code",
@@ -469,25 +487,97 @@ class AgentWorkflow:
         code = state.get(code_key, "")
         
         
-        verification = self.code_verifier.process(
-            interpretation=interpretation,
-            new_code=code,
-            previous_code=previous_assembled,
-            component_type=component_type
-        )
+        try:
+            verification = self.code_verifier.process(
+                interpretation=interpretation,
+                new_code=code,
+                previous_code=previous_assembled,
+                component_type=component_type
+            )
+            
+            
+            suggestions_text = verification.get("suggestions", "")
+        except Exception as e:
+            suggestions_text = ""
+            verification = {"satisfied": False, "suggestions": ""}
         
-        if verification["satisfied"]:
-            print(f"✅ {component_type} code verification: SATISFIED")
+        new_state = {
+            "verification_satisfied": verification.get("satisfied", False),
+            "verification_suggestions": suggestions_text
+        }
+        
+        if verification.get("satisfied", False):
+            new_state["component_retry_count"] = 0
         else:
-            print(f"⚠️ {component_type} code verification: NOT SATISFIED")
-            print(verification["suggestions"])
+            new_state["component_retry_count"] = component_retry_count + 1
         
         if self.logger:
             formatted_prompt = self.code_verifier.get_last_formatted_prompt() or "No prompt available"
             response = self.code_verifier.get_last_response() or "No response available"
             self.logger.log_step(f"verify_{component_type}", formatted_prompt, response)
         
-        return {}
+        return new_state
+    
+    def _refine_code_node(self, state: WorkflowState) -> WorkflowState:
+        interpretation = state.get("interpretation", "")
+        previous_assembled = state.get("generated_code", "")
+        component_type = state.get("current_component_type", "")
+        suggestions = state.get("verification_suggestions", "")
+        
+        code_map = {
+            "road": "road_code",
+            "ego_vehicle": "ego_vehicle_code",
+            "adversarial_objects": "adversarial_objects_code",
+            "behavior": "behavior_code"
+        }
+        
+        code_key = code_map.get(component_type, "")
+        original_code = state.get(code_key, "")
+        
+        refined_code = self.code_refiner.process(
+            original_code=original_code,
+            suggestions=suggestions,
+            interpretation=interpretation,
+            previous_code=previous_assembled,
+            component_type=component_type
+        )
+        
+        new_state = {
+            code_key: refined_code
+        }
+        
+        if self.logger:
+            formatted_prompt = self.code_refiner.get_last_formatted_prompt() or "No prompt available"
+            response = self.code_refiner.get_last_response() or "No response available"
+            self.logger.log_step(f"refine_{component_type}", formatted_prompt, response)
+        
+        return new_state
+    
+    def _check_verification_result(self, state: WorkflowState) -> str:
+        satisfied = state.get("verification_satisfied", False)
+        component_type = state.get("current_component_type", "")
+        retry_count = state.get("component_retry_count", 0)
+        max_retries = 3
+        
+        if satisfied:
+            assemble_map = {
+                "road": "assemble_road",
+                "ego_vehicle": "assemble_ego",
+                "adversarial_objects": "assemble_adversarial",
+                "behavior": "assemble_behavior"
+            }
+            return assemble_map.get(component_type, "assemble_road")
+        else:
+            if retry_count >= max_retries:
+                assemble_map = {
+                    "road": "assemble_road",
+                    "ego_vehicle": "assemble_ego",
+                    "adversarial_objects": "assemble_adversarial",
+                    "behavior": "assemble_behavior"
+                }
+                return assemble_map.get(component_type, "assemble_road")
+            else:
+                return "refine"
 
     def _assemble_behavior_node(self, state: WorkflowState) -> WorkflowState:
         behavior_code = state.get("behavior_code", "")
@@ -605,7 +695,6 @@ class AgentWorkflow:
     def run(self, user_input: str = "", user_feedback: str = "") -> dict:
         config = {"configurable": {"thread_id": self.thread_id}}
         
-        # Get current state from memory
         current_state = self._get_current_state(config)
         
         if user_feedback:
@@ -623,13 +712,6 @@ class AgentWorkflow:
             if not self.logger:
                 self.logger = WorkflowLogger()
                 workflow_dir = self.logger.create_workflow_folder(user_input)
-                print(f"📁 Logging workflow to: {workflow_dir}")
-            
-            print("\n" + "="*50)
-            print("🚀 Starting Agent Workflow")
-            print("="*50)
-            print(f"📥 User input: {user_input}")
-            print("="*50 + "\n")
             
             initial_state = {
                 "messages": [],
@@ -646,7 +728,11 @@ class AgentWorkflow:
                 "generated_code": "",
                 "validation_result": {},
                 "retry_count": 0,
-                "workflow_status": ""
+                "workflow_status": "",
+                "current_component_type": "",
+                "verification_satisfied": False,
+                "verification_suggestions": "",
+                "component_retry_count": 0
             }
         else:
             return {
@@ -657,9 +743,11 @@ class AgentWorkflow:
         try:
             output = self.app.invoke(initial_state, config)
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
             return {
                 "workflow_status": "error",
-                "message": f"An error occurred: {str(e)}"
+                "message": f"An error occurred: {str(e)}\n\nFull trace:\n{error_trace}"
             }
         
         workflow_status = output.get("workflow_status", "")
@@ -719,7 +807,11 @@ class AgentWorkflow:
             "generated_code": "",
             "validation_result": {},
             "retry_count": 0,
-            "workflow_status": ""
+            "workflow_status": "",
+            "current_component_type": "",
+            "verification_satisfied": False,
+            "verification_suggestions": "",
+            "component_retry_count": 0
         }
 
 
