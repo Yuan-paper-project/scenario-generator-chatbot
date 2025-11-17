@@ -114,3 +114,10 @@ Key dependencies (see `pyproject.toml` for complete list):
 - See `notes/` directory for additional documentation
 
 For issues or questions, please contact the project maintainer.
+
+## Run CARLA in server
+```
+cd ~/caiwang/carla
+source caiwang-venv/bin/activate
+make launch   # or make run
+```
