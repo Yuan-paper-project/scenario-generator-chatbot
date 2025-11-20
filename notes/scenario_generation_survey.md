@@ -40,7 +40,7 @@ This document summarizes recent research and frameworks for scenario generation 
 
 ## 5. Text2Scenario: Text-Driven Scenario Generation for Autonomous Driving Test
 - **Approach:**
-  1. LLM generates scenario code directly from text descriptions.
+  1. LLM generates scenario code directly from text descriptions.(OpenScenario)
   2. No retrieval-augmented generation (RAG); LLM also performs syntax checking.
 
 ---
@@ -63,6 +63,30 @@ This document summarizes recent research and frameworks for scenario generation 
   - Hierarchical decomposition of scenario elements
   - Structured action generation pipeline
   - Adaptive agent behavior refinement
+  - No RAG
+  - Work directly with CARLA API
+
+---
+
+## 7. Talk2Traffic: Interactive and Editable Traffic Scenario Generation for Autonomous Driving with Multimodal Large Language Model
+- **Approach:** 
+  1. Extends ChatScene with enhanced capabilities
+  2. RAG-based retrieval and code assembly for Scenic DSL generation
+  3. Multimodal input support (text, images, etc.)
+  4. Interactive editing of scenarios after generation
+  5. No codebase sharing
+- **Key Point:** Builds upon ChatScene's foundation while adding multimodal capabilities and interactive editing features for improved user control and flexibility.
+
+---
+
+## 8. From Accidents to Insights: Leveraging Multimodal Data for Scenario-Driven ADS Testing
+- **Approach:**
+  1. Extends TARGET's framework with fine-grained scenario generation
+  2. Leverages multimodal accident data (crash reports, images, diagrams, etc.)
+  3. Extracts detailed scenario parameters from real-world accident data
+  4. Generates validated DSL specifications with fine-grained control
+
+- **Key Point:** Builds upon TARGET's validated DSL approach while adding multimodal accident data analysis for more realistic and fine-grained safety-critical scenario generation.
 
 ---
 
