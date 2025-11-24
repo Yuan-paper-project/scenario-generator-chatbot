@@ -16,10 +16,12 @@ Ensure the generated code is:
 3. Compatible with the previously assembled code
 
 Code example reference:
-ego = Car at egoSpawnPt,
-    with heading yaw,
-    with regionContainedIn None,
-    with blueprint EGO_MODEL
+Example 1:
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior()
 
-
-
+Example 2:
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior(egoTrajectory)

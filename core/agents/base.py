@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.chat_models import init_chat_model
 from typing import Any, Dict
 from typing import Optional
+import re
 
 from core.config import get_settings
 from core.prompts import load_prompt
@@ -71,5 +72,13 @@ class BaseAgent(ABC):
             return None
         results = self.vector_store.search(query)
         return "\n".join([doc.page_content for doc in results]) if results else None
+
+    def _extract_code_from_response(self, response: str) -> str:
+        """Extract code from markdown code blocks."""
+        code_block_pattern = r"```(?:scenic|python)?\n(.*?)```"
+        matches = re.findall(code_block_pattern, response, re.DOTALL)
+        if matches:
+            return matches[0].strip()
+        return response.strip()
 
 

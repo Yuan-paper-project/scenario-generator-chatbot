@@ -5,7 +5,7 @@ from typing import Dict, Any
 class DetailEnricher(BaseAgent):
     def __init__(self):
         prompt = load_prompt("detail_enricher")
-        super().__init__(prompt, use_rag=False)
+        super().__init__(prompt, use_rag=False, model_name = "gemini-2.5-flash")
     
     def process(self, logical_interpretation: str) -> Dict[str, Any]:
         response = self.invoke(context={"logical_interpretation": logical_interpretation})

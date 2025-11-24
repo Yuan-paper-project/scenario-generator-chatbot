@@ -18,6 +18,7 @@ from .agents.RoadGenerator import RoadGenerator
 from .agents.EgoVehicleSetup import EgoVehicleSetup
 from .agents.AdversarialObjectsGenerator import AdversarialObjectsGenerator
 from .agents.BehaviorGenerator import BehaviorGenerator
+from .agents.RestrictionRequirementsGenerator import RestrictionRequirementsGenerator
 from .agents.CodeAssembler import CodeAssembler
 from .workflow_logger import WorkflowLogger
 
@@ -34,6 +35,7 @@ class WorkflowState(TypedDict):
     ego_vehicle_code: str
     adversarial_objects_code: str
     behavior_code: str
+    restriction_requirements_code: str
     generated_code: str
     validation_result: dict
     retry_count: int
@@ -64,6 +66,7 @@ class AgentWorkflow:
         self.ego_vehicle_setup = EgoVehicleSetup()
         self.adversarial_objects_generator = AdversarialObjectsGenerator()
         self.behavior_generator = BehaviorGenerator()
+        self.restriction_requirements_generator = RestrictionRequirementsGenerator()
         self.code_assembler = CodeAssembler()
         
         self.workflow = StateGraph(state_schema=WorkflowState)
@@ -74,16 +77,18 @@ class AgentWorkflow:
         self.workflow.add_node("handle_detailed_feedback", self._handle_detailed_feedback_node)
         self.workflow.add_node("header_generation", self._header_generation_node)
         self.workflow.add_node("assemble_header", self._assemble_header_node)
+        self.workflow.add_node("behavior_generation", self._behavior_generation_node)
+        self.workflow.add_node("assemble_behavior", self._assemble_behavior_node)
         self.workflow.add_node("road_generation", self._road_generation_node)
-        self.workflow.add_node("verify_code", self._verify_code_node)
-        self.workflow.add_node("refine_code", self._refine_code_node)
         self.workflow.add_node("assemble_road", self._assemble_road_node)
         self.workflow.add_node("ego_vehicle_setup", self._ego_vehicle_setup_node)
         self.workflow.add_node("assemble_ego", self._assemble_ego_node)
         self.workflow.add_node("adversarial_objects_generation", self._adversarial_objects_generation_node)
         self.workflow.add_node("assemble_adversarial", self._assemble_adversarial_node)
-        self.workflow.add_node("behavior_generation", self._behavior_generation_node)
-        self.workflow.add_node("assemble_behavior", self._assemble_behavior_node)
+        self.workflow.add_node("restriction_requirements_generation", self._restriction_requirements_generation_node)
+        self.workflow.add_node("assemble_restriction_requirements", self._assemble_restriction_requirements_node)
+        self.workflow.add_node("verify_code", self._verify_code_node)
+        self.workflow.add_node("refine_code", self._refine_code_node)
         self.workflow.add_node("validate", self._validate_node)
         self.workflow.add_node("error_correction", self._error_correction_node)
         
@@ -125,31 +130,37 @@ class AgentWorkflow:
         )
         
         self.workflow.add_edge("handle_detailed_feedback", "detail_enrichment")
+        
+        # New order: header → behaviors → spatial relation(road) → ego → adversarial → restrictions/requirements
         self.workflow.add_edge("header_generation", "assemble_header")
-        self.workflow.add_edge("assemble_header", "road_generation")
-        self.workflow.add_edge("road_generation", "verify_code")
-        
-        self.workflow.add_conditional_edges(
-            "verify_code",
-            self._check_verification_result,
-            {
-                "assemble_road": "assemble_road",
-                "assemble_ego": "assemble_ego",
-                "assemble_adversarial": "assemble_adversarial",
-                "assemble_behavior": "assemble_behavior",
-                "refine": "refine_code"
-            }
-        )
-        
-        self.workflow.add_edge("refine_code", "verify_code")
-        
+        self.workflow.add_edge("assemble_header", "behavior_generation")
+        self.workflow.add_edge("behavior_generation", "assemble_behavior")
+        self.workflow.add_edge("assemble_behavior", "road_generation")
+        self.workflow.add_edge("road_generation", "assemble_road")
         self.workflow.add_edge("assemble_road", "ego_vehicle_setup")
-        self.workflow.add_edge("ego_vehicle_setup", "verify_code")
+        self.workflow.add_edge("ego_vehicle_setup", "assemble_ego")
         self.workflow.add_edge("assemble_ego", "adversarial_objects_generation")
-        self.workflow.add_edge("adversarial_objects_generation", "verify_code")
-        self.workflow.add_edge("assemble_adversarial", "behavior_generation")
-        self.workflow.add_edge("behavior_generation", "verify_code")
-        self.workflow.add_edge("assemble_behavior", "validate")
+        self.workflow.add_edge("adversarial_objects_generation", "assemble_adversarial")
+        self.workflow.add_edge("assemble_adversarial", "restriction_requirements_generation")
+        self.workflow.add_edge("restriction_requirements_generation", "assemble_restriction_requirements")
+        self.workflow.add_edge("assemble_restriction_requirements", "validate")
+        
+        # Commented out verify_code process after each snippet generation
+        # self.workflow.add_edge("road_generation", "verify_code")
+        # 
+        # self.workflow.add_conditional_edges(
+        #     "verify_code",
+        #     self._check_verification_result,
+        #     {
+        #         "assemble_road": "assemble_road",
+        #         "assemble_ego": "assemble_ego",
+        #         "assemble_adversarial": "assemble_adversarial",
+        #         "assemble_behavior": "assemble_behavior",
+        #         "refine": "refine_code"
+        #     }
+        # )
+        # 
+        # self.workflow.add_edge("refine_code", "verify_code")
         
         self.workflow.add_conditional_edges(
             "validate",
@@ -452,6 +463,48 @@ class AgentWorkflow:
         
         return new_state
 
+    def _restriction_requirements_generation_node(self, state: WorkflowState) -> WorkflowState:
+        interpretation = state.get("interpretation", "")
+        previous_assembled = state.get("generated_code", "")
+        
+        restriction_requirements_code = self.restriction_requirements_generator.process(interpretation, previous_assembled)
+        
+        new_state = {
+            "restriction_requirements_code": restriction_requirements_code,
+            "current_component_type": "restriction_requirements"
+        }
+        
+        if self.logger:
+            formatted_prompt = self.restriction_requirements_generator.get_last_formatted_prompt() or "No prompt available"
+            response = self.restriction_requirements_generator.get_last_response() or "No response available"
+            self.logger.log_step("restriction_requirements_generation", formatted_prompt, response)
+        
+        return new_state
+
+    def _assemble_restriction_requirements_node(self, state: WorkflowState) -> WorkflowState:
+        restriction_requirements_code = state.get("restriction_requirements_code", "")
+        previous_assembled = state.get("generated_code", "")
+        
+        assembled_code = self.code_assembler.process(
+            previous_assembled_code=previous_assembled,
+            new_component=restriction_requirements_code,
+            component_type="restriction_requirements"
+        )
+        
+        new_state = {
+            "generated_code": assembled_code,
+            "messages": state.get("messages", []) + [
+                AIMessage(content=f"Complete assembled Scenic code:\n```scenic\n{assembled_code}\n```")
+            ]
+        }
+        
+        if self.logger:
+            formatted_prompt = self.code_assembler.get_last_formatted_prompt() or "No prompt available"
+            response = self.code_assembler.get_last_response() or "No response available"
+            self.logger.log_step("assemble_restriction_requirements", formatted_prompt, response)
+        
+        return new_state
+
     def _behavior_generation_node(self, state: WorkflowState) -> WorkflowState:
         interpretation = state.get("interpretation", "")
         previous_assembled = state.get("generated_code", "")
@@ -590,10 +643,7 @@ class AgentWorkflow:
         )
         
         new_state = {
-            "generated_code": assembled_code,
-            "messages": state.get("messages", []) + [
-                AIMessage(content=f"Complete assembled Scenic code:\n```scenic\n{assembled_code}\n```")
-            ]
+            "generated_code": assembled_code
         }
         
         if self.logger:
@@ -725,6 +775,7 @@ class AgentWorkflow:
                 "ego_vehicle_code": "",
                 "adversarial_objects_code": "",
                 "behavior_code": "",
+                "restriction_requirements_code": "",
                 "generated_code": "",
                 "validation_result": {},
                 "retry_count": 0,
@@ -804,6 +855,7 @@ class AgentWorkflow:
             "ego_vehicle_code": "",
             "adversarial_objects_code": "",
             "behavior_code": "",
+            "restriction_requirements_code": "",
             "generated_code": "",
             "validation_result": {},
             "retry_count": 0,

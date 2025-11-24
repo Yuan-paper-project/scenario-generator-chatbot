@@ -30,5 +30,6 @@ Spawn Position: The pedestrian spawns on the left sidewalk, ahead of the ego
 Behavior: The ego vehicle is traveling forward and slows down to make the right turn. The pedestrian walks across the road and suddenly stops in the middle of the crosswalk.
 Geometry: four-way urban intersection with a crosswalk
 
+
 Now, please extract and convert the following scenario into the logical structured format (WITHOUT quantitative details): {query}
 

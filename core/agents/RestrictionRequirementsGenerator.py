@@ -3,9 +3,9 @@ from core.prompts import load_prompt
 from typing import Dict, Any
 
 
-class EgoVehicleSetup(BaseAgent):
+class RestrictionRequirementsGenerator(BaseAgent):
     def __init__(self):
-        prompt = load_prompt("ego_vehicle_setup")
+        prompt = load_prompt("restriction_requirements_generator")
         super().__init__(prompt, use_rag=True)
     
     def process(self, interpretation: str, previous_assembled_code: str = "") -> str:

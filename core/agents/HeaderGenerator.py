@@ -2,9 +2,12 @@ from typing import Optional
 
 
 class HeaderGenerator:
-    HEADER = """param map = localPath('../../assets/maps/CARLA/Town01.xodr')
-
-model scenic.domains.driving.model"""
+    HEADER = """
+    param map = localPath('../../assets/maps/CARLA/Town05.xodr')
+    param carla_map = 'Town05'
+    model scenic.domains.driving.model
+    MODEL = 'vehicle.mini.cooper_s_2021'
+    """
 
     def __init__(self, header: Optional[str] = None):
         self.header = header if header is not None else self.HEADER

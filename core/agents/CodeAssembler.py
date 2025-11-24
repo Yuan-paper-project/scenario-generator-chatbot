@@ -1,14 +1,13 @@
 from core.agents.base import BaseAgent
 from core.prompts import load_prompt
 from typing import Dict, Any
-import re
 
 
 class CodeAssembler(BaseAgent):
     
     def __init__(self):
         prompt = load_prompt("code_assembler")
-        super().__init__(prompt, use_rag=False)
+        super().__init__(prompt, use_rag=False, model_name = "gemini-2.5-flash")
     
     def process(self, 
                 previous_assembled_code: str = "",
@@ -32,10 +31,3 @@ class CodeAssembler(BaseAgent):
         assembled_code = self._extract_code_from_response(response)
         
         return assembled_code
-    
-    def _extract_code_from_response(self, response: str) -> str:
-        code_block_pattern = r"```(?:scenic|python)?\n(.*?)```"
-        matches = re.findall(code_block_pattern, response, re.DOTALL)
-        if matches:
-            return matches[0].strip()
-        return response.strip()

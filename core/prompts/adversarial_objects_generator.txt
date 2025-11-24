@@ -16,12 +16,23 @@ Ensure the generated code is:
 3. Compatible with the previously assembled code
 
 Code example reference:
-```scenic
-param OPT_LEADING_DISTANCE = Range(0, 30)
-param OPT_LEADING_SPEED = Range(1, 5)
-LeadingSpawnPt = OrientedPoint following roadDirection from egoSpawnPt for globalParameters.OPT_LEADING_DISTANCE
-LeadingAgent = Car at LeadingSpawnPt,
-    with behavior FollowLaneBehavior(target_speed=globalParameters.OPT_LEADING_SPEED)
-```
+Example 1:
+adversary = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
 
+lead = new Car following roadDirection for LEAD_DIST,
+	with blueprint MODEL,
+	with behavior LeadBehavior()
+
+Example 2:
+adv = new Car following roadDirection from ego for ADV_INIT_DIST,
+    with blueprint MODEL,
+    with behavior AdvBehavior()
+
+Example 3:
+ped = new Pedestrian right of tempSpawnPt by 5,
+    facing ego.heading,
+    with regionContainedIn None,
+    with behavior PedestrianBehavior()
 

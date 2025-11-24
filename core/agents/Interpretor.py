@@ -5,7 +5,7 @@ from typing import Dict, Any
 class InterpretorAgent(BaseAgent):
     def __init__(self):
         prompt = load_prompt("interperator")
-        super().__init__(prompt,use_rag=False)
+        super().__init__(prompt,use_rag=False, model_name = "gemini-2.5-flash")
     
     def process(self, query: str) -> Dict[str, Any]:
         """Analyze the query and extract key information."""

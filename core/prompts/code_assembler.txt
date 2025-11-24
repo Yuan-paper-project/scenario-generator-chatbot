@@ -12,11 +12,10 @@ Component type: {component_type}
 
 Instructions:
 1. Integrate the new component into the previously assembled code
-2. Ensure proper code ordering (header, road setup, ego vehicle, adversarial objects, behaviors)
-3. Resolve any variable dependencies between components
-4. Ensure the assembled code is valid Scenic syntax
-5. Remove any duplicate declarations or conflicting definitions
-6. Maintain proper indentation and formatting
+2. Resolve any variable dependencies between components
+3. Ensure the assembled code is valid Scenic syntax
+4. Remove any duplicate declarations or conflicting definitions
+5. Maintain proper indentation and formatting
 
-Output ONLY the complete assembled Scenic code in a code block. No prose or explanations.
+Output ONLY the complete assembled Scenic code in a code block. 
 

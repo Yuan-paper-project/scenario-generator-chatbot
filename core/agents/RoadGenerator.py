@@ -1,7 +1,6 @@
 from core.agents.base import BaseAgent
 from core.prompts import load_prompt
 from typing import Dict, Any
-import re
 
 
 class RoadGenerator(BaseAgent):
@@ -16,11 +15,4 @@ class RoadGenerator(BaseAgent):
         }
         response = self.invoke(context=context)
         return self._extract_code_from_response(response)
-    
-    def _extract_code_from_response(self, response: str) -> str:
-        code_block_pattern = r"```(?:scenic|python)?\n(.*?)```"
-        matches = re.findall(code_block_pattern, response, re.DOTALL)
-        if matches:
-            return matches[0].strip()
-        return response.strip()
 
