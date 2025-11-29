@@ -1,0 +1,15 @@
+Task: Update the Scenic code by replacing the description line with the user's new scenario description.
+
+User's new scenario description:
+{user_description}
+
+Retrieved Scenic code to update:
+{retrieved_code}
+
+Instructions:
+2. Replace the description line in the code with the user's scenario description
+3. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and formatting
+4. Output the updated code in a ```scenic code block
+
+
+Now output the updated code:
