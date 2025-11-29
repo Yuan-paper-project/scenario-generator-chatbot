@@ -13,6 +13,7 @@ Uses the code2logical.txt prompt template to extract:
 import os
 import json
 import sys
+import re
 from pathlib import Path
 from typing import Dict, Any
 from datetime import datetime
@@ -21,6 +22,54 @@ from core.config import get_settings
 
 # Load settings
 settings = get_settings()
+
+
+def remove_comments_from_scenic(scenic_code: str) -> str:
+    lines = scenic_code.split('\n')
+    cleaned_lines = []
+    
+    for line in lines:
+        if re.match(r'^\s*#+\s*$', line):
+            continue
+        
+        if re.match(r'^\s*#.*#\s*$', line) and line.count('#') >= 2:
+            stripped = line.strip()
+            if stripped.startswith('#') and stripped.endswith('#'):
+                continue
+        
+        if '#' in line:
+            if line.strip().startswith('#'):
+                continue
+            
+            in_string = False
+            quote_char = None
+            cleaned_line = []
+            
+            for i, char in enumerate(line):
+                if char in ('"', "'") and (i == 0 or line[i-1] != '\\'):
+                    if not in_string:
+                        in_string = True
+                        quote_char = char
+                    elif char == quote_char:
+                        in_string = False
+                        quote_char = None
+                
+                if char == '#' and not in_string:
+                    # This is a comment, stop here
+                    break
+                
+                cleaned_line.append(char)
+            
+            line = ''.join(cleaned_line).rstrip()
+        
+        if line.strip():
+            cleaned_lines.append(line)
+    
+    result = '\n'.join(cleaned_lines)
+    
+    result = re.sub(r'\n\s*\n\s*\n+', '\n\n', result)
+    
+    return result.strip()
 
 
 class ScenicToLogicalAgent(BaseAgent):
@@ -42,11 +91,13 @@ class ScenicToLogicalAgent(BaseAgent):
 
 
 def parse_logical_structure(llm_response: str, scenic_code: str) -> Dict[str, Any]:
-
+    # Clean the scenic code by removing all comments
+    cleaned_code = remove_comments_from_scenic(scenic_code)
+    
     result = {
         "Scenario": {
             "description": "",
-            "code": scenic_code
+            "code": cleaned_code
         },
         "Ego Vehicle": {
             "description": "",
