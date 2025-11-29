@@ -1,7 +1,3 @@
-"""
-Simple single-use script to restructure Scenic files using your existing LLM setup.
-This script uses the BaseAgent infrastructure already in your codebase.
-"""
 
 import os
 import sys
@@ -71,11 +67,9 @@ Return ONLY the restructured Scenic code.
 
 
 class ScenicRestructureAgent(BaseAgent):
-    """Agent for restructuring Scenic files."""
     
     def __init__(self):
         prompt_template = create_restructure_prompt_template()
-        # Use gemini-1.5-flash for faster and cheaper restructuring
         super().__init__(
             prompt_template=prompt_template,
             model_name="gemini-2.5-flash",
@@ -84,27 +78,22 @@ class ScenicRestructureAgent(BaseAgent):
         )
     
     def process(self, scenic_content: str) -> str:
-        """Process and restructure the Scenic file content."""
         response = self.invoke(context={"scenic_content": scenic_content})
         return self._extract_code_from_response(response)
 
 
 def restructure_scenic_file(agent: ScenicRestructureAgent, scenic_content: str) -> str:
-    """Restructure Scenic file content using the agent."""
     print("Calling LLM to restructure file...")
     result = agent.process(scenic_content)
     return result.strip()
 
 
 def process_file(agent: ScenicRestructureAgent, input_path: str, output_path: str = None, dry_run: bool = False, output_dir: str = None):
-    """Process a single Scenic file."""
     print(f"\nProcessing: {input_path}")
     
-    # Read the file
     with open(input_path, 'r', encoding='utf-8') as f:
         original_content = f.read()
     
-    # Restructure
     restructured_content = restructure_scenic_file(agent, original_content)
 
     print(f"Processing content is : {original_content}")
@@ -117,17 +106,14 @@ def process_file(agent: ScenicRestructureAgent, input_path: str, output_path: st
         print("="*80)
         return
     
-    # Determine output file path
     if output_path:
         output_file = output_path
     elif output_dir:
-        # Save to output directory with same filename
         input_file = Path(input_path)
         output_file = Path(output_dir) / input_file.name
     else:
         output_file = input_path
     
-    # Write to output
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(restructured_content)
     
@@ -145,12 +131,10 @@ def process_directory(agent: ScenicRestructureAgent, directory_path: str, output
     
     print(f"Found {len(scenic_files)} files to process")
     
-    # Create output directory
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
     print(f"Output will be saved to: {output_path.absolute()}")
     
-    # Create backup directory
     if backup:
         backup_dir = path / "backup"
         backup_dir.mkdir(exist_ok=True)
@@ -160,7 +144,6 @@ def process_directory(agent: ScenicRestructureAgent, directory_path: str, output
         print(f"\n[{i}/{len(scenic_files)}]", end=" ")
         
         try:
-            # Create backup
             if backup:
                 backup_path = backup_dir / file_path.name
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -168,7 +151,6 @@ def process_directory(agent: ScenicRestructureAgent, directory_path: str, output
                 with open(backup_path, 'w', encoding='utf-8') as f:
                     f.write(backup_content)
             
-            # Process file and save to output directory
             process_file(agent, str(file_path), output_dir=str(output_path))
             
         except Exception as e:
@@ -192,13 +174,11 @@ def main():
     
     args = parser.parse_args()
     
-    # Check path exists
     path = Path(args.path)
     if not path.exists():
         print(f"Error: Path '{args.path}' does not exist")
         sys.exit(1)
     
-    # Initialize agent
     print("="*80)
     print("Scenic File Restructuring Tool")
     print("="*80)
@@ -215,13 +195,10 @@ def main():
         print("  export GOOGLE_API_KEY='your-api-key-here'")
         sys.exit(1)
     
-    # Process file or directory
     if path.is_file():
-        # For single file, use -o if provided, otherwise use output_dir
         if args.output:
             process_file(agent, str(path), output_path=args.output, dry_run=args.dry_run)
         else:
-            # Create output directory for single file too
             output_path = Path(args.output_dir)
             output_path.mkdir(exist_ok=True)
             process_file(agent, str(path), dry_run=args.dry_run, output_dir=args.output_dir)
@@ -233,10 +210,8 @@ def main():
             print("Warning: --output flag ignored for directory processing")
         
 
-        # Show where files will be saved
         print(f"\nFiles will be saved to: {Path(args.output_dir).absolute()}")
         
-        # Confirmation for directory processing
         response = input(f"This will restructure ALL .scenic files in '{args.path}'.\nContinue? [y/N]: ")
         if response.lower() != 'y':
             print("Cancelled.")
