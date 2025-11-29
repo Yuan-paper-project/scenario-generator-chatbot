@@ -49,7 +49,7 @@ class BaseAgent(ABC):
         # Store the formatted prompt for logging
         self.last_formatted_prompt = formatted_prompt
         
-        print(f"Invoking LLM with prompt:\n{formatted_prompt}\n")
+        # print(f"Invoking LLM with prompt:\n{formatted_prompt}\n")
         response = self.llm.invoke([HumanMessage(content=formatted_prompt)])
         response_content = response.content
         

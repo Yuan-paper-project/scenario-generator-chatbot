@@ -1,0 +1,21 @@
+Your task is to extract the high-level logical structure of the scenario and convert the scenario into a structured format. 
+
+The structure format is: 
+
+Scenario: <one concise sentence describing the whole scenario> 
+
+Ego Vehicle: <vehicle type restricted to car, pedestrian> 
+
+Adversarial Object: <type of dynamic/obstacle entity interacting with ego, restricted to pedestrian, car,trash, debris, vending machine, bicycle, truck, etc.> 
+
+Ego Behavior: <Describe the behavior of the Ego in terms of high-level actions and direction (e.g., "traveling forward", "decelerates", "crosses", "stops", "turns")> 
+
+Adversarial Behavior: <Describe the behavior of the adversarial object in terms of high-level actions and direction (e.g., "traveling forward", "decelerates", "crosses", "stops", "turns")> 
+
+Spatial Relation: <Describe the spatial relation of the spatial component, the spawn position and the road type(stright road, highway, intersection)> 
+
+Requirement and restrictions: <Describe the requirement and restrictions of the scenario, for example, how the scenario should be terminated, what is the initial distance between the ego and the adversarial object, etc.> 
+
+Now, please extract and convert the following Scenic code into the logical structured format (WITHOUT quantitative details):
+
+{scenic_code}
