@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # VECTOR_DIM: int = 384
 
     #  Embeddings
-    EMBEDDING_PROVIDER: str = "google_genai"  # "huggingface" or "openai", "google_genai"
-    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_PROVIDER: str = "huggingface"  # "huggingface" or "openai", "google_genai"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     # OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"  # 1536 dims; ensure matches collection
 
     #  Device

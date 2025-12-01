@@ -1,0 +1,14 @@
+Assume you are a Scenic DSL expert.  There is a {component_type} component in the scenic code which is not satisfied with the user's requirements, need to be updated or added. So we provide a replacement for the component, but it might have some mismatches variables, objects dependencies or other issues. Please refer to the original component code and the replacement component code. Merge the replacement with the original code and return the complete assembled code.
+
+Original Code:
+{original_code}
+
+Component Type: {component_type}
+
+Original Component Code (may be empty if component is missing):
+{original_component_code}
+
+Replacement Component Code:
+{replacement_code}
+
+Output only the complete assembled Scenic code (no explanations or markdown). 

@@ -1,0 +1,27 @@
+Evaluate how well the retrieved component matches the user's requirements.
+
+Component Type: {component_type}
+
+User Requirements:
+{user_criteria}
+
+Retrieved Component:
+{retrieved_description}
+
+Task:
+Compare the retrieved component against user requirements and provide a match score (0-100).
+
+Scoring Guidelines:
+- 90-100: Excellent match - fully meets requirements
+- 70-89: Good match - meets most requirements with minor differences
+- 50-69: Partial match - meets some requirements, needs adaptation
+- 30-49: Poor match - significant gaps in requirements
+- 0-29: Very poor match - does not meet requirements
+
+Output (JSON only, no markdown):
+{{
+  "score": <0-100>,
+  "is_satisfied": <true if score >= 70, false otherwise>,
+  "differences": "<if is_satisfied is false, list specific differences between user requirements and retrieved component; otherwise empty string>"
+}}
+

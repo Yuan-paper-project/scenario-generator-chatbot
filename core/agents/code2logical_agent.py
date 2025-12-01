@@ -8,7 +8,7 @@ class Code2LogicalAgent(BaseAgent):
         
         super().__init__(
             prompt_template=prompt,
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-2.5-flash",
             model_provider="google_genai",
             use_rag=False
         )
@@ -18,22 +18,28 @@ class Code2LogicalAgent(BaseAgent):
         return response.strip()
     
     def adapt(self, original_query: str, current_interpretation: str, user_feedback: str) -> str:
-        prompt = f"""Original query: {original_query}
+        prompt = f"""Your task is to update the high-level logical structure of the scenario based on user feedback.
 
-            Current interpretation:
-            {current_interpretation}
+        Original query: {original_query}
 
-            User feedback: {user_feedback}
+        Current interpretation:
+        {current_interpretation}
 
-            Update the interpretation based on the feedback. Output the same structured format:
+        User feedback: {user_feedback}
 
-            Scenario: <description>
-            Ego Vehicle: <type>
-            Adversarial Object: <type>
-            Ego Behavior: <description>
-            Adversarial Behavior: <description>
-            Spatial Relation: <description>
-            Requirement and restrictions: <description>"""
+        Update the interpretation based on the user feedback. Output ONLY a valid JSON object with the following structure (NO markdown code blocks, NO additional text):
+
+        {{
+        "Scenario": "<one concise sentence describing the whole scenario>",
+        "Ego Vehicle": "<vehicle type restricted to car, pedestrian>",
+        "Adversarial Object": "<type of dynamic/obstacle entity interacting with ego, restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.>",
+        "Ego Behavior": "<Describe the behavior of the Ego in terms of high-level actions and direction (e.g., traveling forward, decelerates, crosses, stops, turns)>",
+        "Adversarial Behavior": "<Describe the behavior of the adversarial object in terms of high-level actions and direction (e.g., traveling forward, decelerates, crosses, stops, turns)>",
+        "Spatial Relation": "<Describe the spatial relation of the spatial component, the spawn position and the road type (straight road, highway, intersection)>",
+        "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for example, how the scenario should be terminated, what is the initial distance between the ego and the adversarial object, etc.>"
+        }}
+
+        Apply the user feedback to update the relevant fields. Output ONLY the JSON object:"""
                 
         response = self.llm.invoke([HumanMessage(content=prompt)])
         return response.content.strip()
