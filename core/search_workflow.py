@@ -373,6 +373,7 @@ class SearchWorkflow:
                         entity = hit.entity
                         candidate_desc = entity.get("description", "")
                         candidate_code = entity.get("code", "")
+                        candidate_id = entity.get("scenario_id", "")
                         
                         candidate_score = self.scoring_agent.score_component(
                             component_type=component_type,
@@ -380,12 +381,13 @@ class SearchWorkflow:
                             retrieved_description=candidate_desc
                         )
                         
-                        print(f"[INFO]   Candidate {idx}/5 score: {candidate_score['score']}/100")
+                        print(f"[INFO]   Candidate {idx}/5 score: {candidate_score['score']}/100, Scenario ID: {candidate_id}")
                         
                         if candidate_score['score'] > best_candidate_score['score']:
                             best_candidate = {
                                 "description": candidate_desc,
-                                "code": candidate_code
+                                "code": candidate_code,
+                                "scenario_id": candidate_id
                             }
                             best_candidate_score = candidate_score
                         
@@ -419,6 +421,41 @@ class SearchWorkflow:
         if not retrieved_components:
             print("[WARNING] No components to assemble")
             return state
+        
+        # Print summary of base scenario and component replacements
+        base_scenario_id = state.get("search_results", [{}])[0].get("scenario_id", "Unknown")
+        print("\n" + "="*70)
+        print("[INFO] 📋 SCENARIO COMPOSITION SUMMARY")
+        print("="*70)
+        print(f"[INFO] Base Scenario ID: {base_scenario_id}")
+        
+        # Check which components have been replaced
+        replaced_components = []
+        for component_type, component_data in retrieved_components.items():
+            if component_type == "Scenario":
+                continue
+            if component_type == "Requirement and restrictions":
+                continue
+                
+            original_data = original_components.get(component_type, {})
+            original_code = original_data.get("code", "")
+            current_code = component_data.get("code", "")
+            current_scenario_id = component_data.get("scenario_id", "")
+            
+            if current_code and (not original_code or original_code != current_code):
+                if current_scenario_id and current_scenario_id != base_scenario_id:
+                    replaced_components.append({
+                        "type": component_type,
+                        "from_scenario": current_scenario_id
+                    })
+        
+        if replaced_components:
+            print(f"[INFO] Replaced Components: {len(replaced_components)}")
+            for comp in replaced_components:
+                print(f"[INFO]   - {comp['type']}: from Scenario {comp['from_scenario']}")
+        else:
+            print("[INFO] No components were replaced (using all original components)")
+        print("="*70 + "\n")
         
         print("\n[INFO] Assembling final code from components...")
         
@@ -461,11 +498,22 @@ class SearchWorkflow:
                 print(f"[DEBUG] {component_type} is unsatisfied but has replacement - will assemble")
             
             if should_assemble:
+                source_scenario_id = current_component_data.get("scenario_id", "")
+                source_context = ""
+                
+                if source_scenario_id and source_scenario_id != state.get("search_results", [{}])[0].get("scenario_id", ""):
+                    print(f"[DEBUG] Fetching source context from scenario {source_scenario_id} for {component_type}")
+                    source_components = self._retrieve_components_by_scenario_id(source_scenario_id)
+                    if source_components:
+                        # Get the full scenario code as context
+                        source_context = source_components.get("Scenario", {}).get("code", "")
+                
                 replacements[component_type] = {
                     "original_code": original_component_code,
-                    "replacement_code": current_component_code
+                    "replacement_code": current_component_code,
+                    "source_context": source_context
                 }
-                print(f"[DEBUG] Will replace {component_type}: original={'EXISTS' if original_component_code else 'MISSING'}, replacement={'EXISTS' if current_component_code else 'MISSING'}")
+                print(f"[DEBUG] Will replace {component_type}: original={'EXISTS' if original_component_code else 'MISSING'}, replacement={'EXISTS' if current_component_code else 'MISSING'}, source_context={'EXISTS' if source_context else 'NOT_NEEDED'}")
         
         if replacements:
             print(f"[INFO] Assembling code with {len(replacements)} component replacement(s)...")

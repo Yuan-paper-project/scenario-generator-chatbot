@@ -1,4 +1,6 @@
-Assume you are a Scenic DSL expert.  There is a {component_type} component in the scenic code which is not satisfied with the user's requirements, need to be updated or added. So we provide a replacement for the component, but it might have some mismatches variables, objects dependencies or other issues. Please refer to the original component code and the replacement component code. Merge the replacement with the original code and return the complete assembled code.
+You are a Scenic DSL expert. A {component_type} component needs to be replaced or added in the scenario.
+
+we provide a replacement for the component, but the replacement component may reference variables, parameters, or objects that don't exist in the original code. Your task is to intelligently handle these dependencies and merge the replacement with the original code and return the complete assembled code.Leave the rest of the original code unchanged.
 
 Original Code:
 {original_code}
@@ -11,4 +13,13 @@ Original Component Code (may be empty if component is missing):
 Replacement Component Code:
 {replacement_code}
 
-Output only the complete assembled Scenic code (no explanations or markdown). 
+Source Scenario Context (where replacement came from - use this to find missing definitions):
+{source_context}
+
+COMMON DEPENDENCY PATTERNS TO HANDLE:
+- Trajectory parameters (e.g., egoTrajectory, advTrajectory)
+- Lane/maneuver definitions (e.g., egoInitLane, egoManeuver)
+- Distance ranges and thresholds
+- Behavioral parameters
+
+Output only the complete assembled Scenic code (no explanations, comments, or markdown formatting). 

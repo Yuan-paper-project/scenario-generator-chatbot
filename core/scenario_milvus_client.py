@@ -100,6 +100,7 @@ class ScenarioMilvusClient:
             try:
                 component = self.query_component_by_scenario_and_type(scenario_id, component_type)
                 if component:
+                    component["source_scenario_id"] = scenario_id
                     components[component_type] = component
             except Exception as e:
                 logger.warning(f"Failed to retrieve {component_type} for scenario {scenario_id}: {e}")
