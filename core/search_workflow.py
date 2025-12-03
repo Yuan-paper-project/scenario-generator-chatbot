@@ -43,7 +43,7 @@ class SearchWorkflow:
         self.max_refinement_iterations = 2  # Maximum number of refinement iterations
         
         try:
-            self.milvus_client = ScenarioMilvusClient()
+            self.milvus_client = ScenarioMilvusClient(collection_name="scenario_components_with_subject")
             print("[INFO] Successfully initialized ScenarioMilvusClient")
         except Exception as e:
             print(f"[WARNING] Failed to initialize ScenarioMilvusClient: {e}")
@@ -606,10 +606,6 @@ class SearchWorkflow:
         logical_interpretation = state["logical_interpretation"]
         selected_code = state["selected_code"]
         
-        print(f"\n[DEBUG] Full logical interpretation:")
-        print(logical_interpretation[:500])
-        print("...")
-        
         # Extract just the scenario description from the logical interpretation
         lines = logical_interpretation.strip().split('\n')
         scenario_description = ""
@@ -636,10 +632,6 @@ class SearchWorkflow:
                 retrieved_code=selected_code
             )
             
-            print(f"[DEBUG] Adapted code length: {len(adapted_code)} chars")
-            # print(f"[DEBUG] Adapted code has proper newlines: {'\\n' in adapted_code}")
-            print(f"[DEBUG] First 300 chars of adapted code:")
-            print(adapted_code[:300])
             
             state["adapted_code"] = adapted_code
             state["workflow_status"] = "completed"

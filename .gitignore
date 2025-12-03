@@ -7,6 +7,5 @@ __pycache__/
 .Python-version
 uv.lock
 
-data/
 .env
 results/

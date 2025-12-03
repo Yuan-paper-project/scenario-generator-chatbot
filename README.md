@@ -121,3 +121,11 @@ cd ~/caiwang/carla
 source caiwang-venv/bin/activate
 make launch   # or make run
 ```
+
+
+### Fixing bug of carla
+```
+tasklist | findstr /I carla
+taskkill /F /IM CarlaUE4.exe
+taskkill /F /IM CarlaUE4-Win64-Shipping.exe
+```
