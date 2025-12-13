@@ -14,55 +14,116 @@ def create_restructure_prompt_template() -> str:
     return """Restructure the following Scenic code by reorganizing it into clearly labeled sections.
 
 CRITICAL RULES:
+1. DO NOT modify any code logic, syntax, or variable/function names.
+2. DO NOT remove any code statements.
+3. ONLY reorganize the code and add section headers.
+4. Each adversarial object MUST have its OWN separate "Adversarial" section.
+5. Each section MUST include ALL parameters/constants it uses (duplicates are OK and expected).
 
-DO NOT modify any code logic, syntax, or descriptions.
+REQUIRED SECTION ORDER:
 
-DO NOT remove any code statements.
+#################################
+# Description                   #
+#################################
 
-ONLY reorganize the code and update section headers.
+#################################
+# Header                        #
+#################################
 
-Group related parameters/constants with the sections where they are used.
+#################################
+# Ego                           #
+#################################
 
-SECTION STRUCTURE (use EXACT format and order — titles must match these section headers exactly):
-Description
-Header (map parameters, model imports, shared constants like MODEL)
-Ego Behavior
-Adversarial Behavior
-Spatial Relation
-Ego object
-Adversarial object
-Requirements and Restrictions
+#################################
+# Adversarial                   #
+#################################
+[Create SEPARATE section for EACH adversarial object]
 
-Notes:
+#################################
+# Spatial Relation              #
+#################################
 
-Preserve every line of the original Scenic file; do not add, delete, or change code or comments — only move lines between the specified sections and add or update section header comments.
+#################################
+# Requirements and Restrictions #
+#################################
 
-When grouping parameters/constants, place each parameter near the behaviors or objects that use it (but do not change parameter values).
+PARAMETER PLACEMENT RULE (CRITICAL):
+- ONLY include parameters/constants in sections where they are ACTUALLY USED
+- Each parameter should appear in the section where it is referenced in the code
+- If a parameter is used in multiple sections, include it in EACH section that uses it
+- DO NOT include parameters that are not referenced in that section's code
+- Examples:
+  * If OPT_EGO_SPEED is only used in "ego = new Car with speed OPT_EGO_SPEED", it goes ONLY in Ego section
+  * If OPT_LC_DIST is used in both adversarial behavior AND require statement, include it in BOTH sections
+  * If OPT_GEO_Y_DIST is only used in spawn point calculation, it goes ONLY in Spatial Relation section
+- Special rules (these stay ONLY in their designated sections):
+  * EGO_MODEL, MODEL - only in Header section
+  * Spawn points (egoSpawnPt, AdvSpawnPt, IntSpawnPt, etc.) - only in Spatial Relation
+  * Lane/trajectory variables (egoLaneSec, advTrajectory, etc.) - only in Spatial Relation
+  * Map/Town variables - only in Header section
 
-Keep any top-of-file metadata (e.g., imports, model declarations) within the Header section unless they clearly belong to one of the other specified sections.
+SECTION CONTENT:
 
-If the original file already contains section-like comment blocks, you may replace those comment blocks with the exact headers above and move content under the correct headers.
+Description: 
+- Convert triple-quoted descriptions to: description = "text"
 
-Maintain the original ordering of code where possible within each new section to avoid changing behavior.
+Header: 
+- param map = localPath(...)
+- param carla_map = ... (or Town variable)
+- model scenic.simulators.carla.model
+- MODEL or EGO_MODEL constants
 
-Input:
+Ego:
+- ONLY param/constants that are ACTUALLY USED in ego behavior or ego object definition
+- Typically includes: OPT_EGO_SPEED, OPT_EGO_INIT_SPEED, OPT_EGO_THROTTLE, etc.
+- Ego behavior definitions (behavior EgoBehavior(), etc.)
+- ego object creation (ego = new Car ...)
+- DO NOT include EGO_MODEL here (it stays in Header section only)
+- DO NOT include parameters used only in other sections
 
-The Scenic source will be supplied in place of the placeholder {{scenic_content}}.
+Adversarial (CREATE MULTIPLE SECTIONS - ONE PER OBJECT):
+- For EACH adversarial object, create a SEPARATE "Adversarial" section
+- Each section includes ONLY:
+  * Parameters/constants ACTUALLY USED in that specific adversarial's behavior or object definition
+  * Typically: OPT_ADV_SPEED, OPT_LEADING_SPEED, OPT_BLOCKER_THROTTLE, PED_MIN_SPEED, etc.
+  * Behavior definition for that adversarial (if any)
+  * Object creation (AdvAgent = new Motorcycle ..., Blocker = new Car ..., LeadingAgent = ..., etc.)
+- Add a comment to identify the object (e.g., # Blocker, # AdvAgent, # LeadingAgent)
+- DO NOT include parameters used only in Spatial Relation or Requirements sections
 
-Example usage: the tool invoking this prompt should substitute the complete Scenic file text for {{scenic_content}} before sending it to the LLM.
+Spatial Relation:
+- ONLY param/constants ACTUALLY USED in this section's code
+- Typically includes: OPT_GEO_ parameters, distance parameters for spawn calculations
+- Lane/intersection selection code (for loops, filters, Uniform selections)
+- Spawn point definitions (egoSpawnPt, IntSpawnPt, AdvSpawnPt, etc.)
+- Trajectory definitions (egoTrajectory, advTrajectory, etc.)
+- Lane section variables (egoLaneSec, adjLaneSec, etc.)
+- DO NOT include parameters only used in behavior definitions or require statements
 
-Output requirements:
+Requirements and Restrictions:
+- ONLY param/constants ACTUALLY USED in require/terminate statements
+- Typically includes: OPT_BRAKE_DIST, INIT_DIST, TERM_DIST, etc.
+- ALL require statements
+- ALL terminate statements
+- DO NOT include parameters not referenced in this section
 
-Return ONLY the restructured Scenic code. Do not include explanations, Markdown code fences, or any additional text. Output the raw Scenic file content only.
+EXAMPLES OF CORRECT DUPLICATION:
+- param OPT_EGO_SPEED appears in Ego section (used in behavior) AND Spatial Relation (if used in calculations)
+- param OPT_LC_DIST appears in Ego section (used in behavior) AND Adversarial section (if used there too)
+- OPT_MOTO_START_DIST appears in Adversarial section (defines moto behavior) AND Spatial Relation (used for spawn calc)
 
-Use the exact section header titles and order listed above, each formatted as a visible comment block (e.g., ################################# style or similar), so they are clearly identifiable in the output.
+OUTPUT FORMAT:
+- Return ONLY the restructured Scenic code
+- NO explanations, NO markdown code fences, NO extra text
+- Use exact section header format with #################################
+- Keep ALL original code logic unchanged
 
 Here is the Scenic code to restructure:
 ```scenic
 {scenic_content}
 ```
-Return ONLY the restructured Scenic code.
 
+Return ONLY the restructured code:
 """
 
 
@@ -117,7 +178,7 @@ def process_file(agent: ScenicRestructureAgent, input_path: str, output_path: st
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(restructured_content)
     
-    print(f"✓ Successfully saved to: {output_file}")
+    print(f"[SUCCESS] Successfully saved to: {output_file}")
 
 
 def process_directory(agent: ScenicRestructureAgent, directory_path: str, output_dir: str = "Scenic\examples\Scenic3.1-Edit", backup: bool = True):
@@ -154,7 +215,7 @@ def process_directory(agent: ScenicRestructureAgent, directory_path: str, output
             process_file(agent, str(file_path), output_dir=str(output_path))
             
         except Exception as e:
-            print(f"✗ Error processing {file_path.name}: {e}")
+            print(f"[ERROR] Error processing {file_path.name}: {e}")
             continue
     
     print(f"\nProcessing complete! Processed {len(scenic_files)} files.")
@@ -186,9 +247,9 @@ def main():
     
     try:
         agent = ScenicRestructureAgent()
-        print("✓ Agent initialized successfully")
+        print("[SUCCESS] Agent initialized successfully")
     except Exception as e:
-        print(f"✗ Error initializing agent: {e}")
+        print(f"[ERROR] Error initializing agent: {e}")
         print("\nMake sure your .env file is configured with:")
         print("  - GOOGLE_API_KEY=your-api-key-here")
         print("\nOr set the environment variable:")

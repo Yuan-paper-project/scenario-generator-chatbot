@@ -1,14 +1,3 @@
-"""
-Agent to process Scenic code files and extract structured logical information into JSON format.
-Uses the code2logical.txt prompt template to extract:
-- Scenario description
-- Ego vehicle information
-- Adversarial object information
-- Ego behavior
-- Adversarial behavior
-- Spatial relations
-- Requirements and restrictions
-"""
 
 import os
 import json
@@ -91,7 +80,6 @@ class ScenicToLogicalAgent(BaseAgent):
 
 
 def parse_logical_structure(llm_response: str, scenic_code: str) -> Dict[str, Any]:
-    # Clean the scenic code by removing all comments
     cleaned_code = remove_comments_from_scenic(scenic_code)
     
     result = {
@@ -99,22 +87,8 @@ def parse_logical_structure(llm_response: str, scenic_code: str) -> Dict[str, An
             "description": "",
             "code": cleaned_code
         },
-        "Ego Vehicle": {
-            "description": "",
-            "code": ""
-        },
-        "Adversarial Object": {
-            "description": "",
-            "code": ""
-        },
-        "Ego Behavior": {
-            "description": "",
-            "code": ""
-        },
-        "Adversarial Behavior": {
-            "description": "",
-            "code": ""
-        },
+        "Egos": [],
+        "Adversarials": [],
         "Spatial Relation": {
             "description": "",
             "code": ""
@@ -125,68 +99,136 @@ def parse_logical_structure(llm_response: str, scenic_code: str) -> Dict[str, An
         }
     }
     
-    lines = llm_response.strip().split('\n')
-    current_section = None
-    current_content = []
-    
-    for line in lines:
-        line_stripped = line.strip()
+    try:
+        cleaned_response = llm_response.strip()
+        if cleaned_response.startswith("```"):
+            lines = cleaned_response.split('\n')
+            cleaned_response = '\n'.join(lines[1:-1]) if len(lines) > 2 else cleaned_response
         
-        if line_stripped.startswith("Scenario:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Scenario"
-            current_content = [line_stripped.replace("Scenario:", "").strip()]
-        elif line_stripped.startswith("Ego Vehicle:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Ego Vehicle"
-            current_content = [line_stripped.replace("Ego Vehicle:", "").strip()]
-        elif line_stripped.startswith("Adversarial Object:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Adversarial Object"
-            current_content = [line_stripped.replace("Adversarial Object:", "").strip()]
-        elif line_stripped.startswith("Ego Behavior:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Ego Behavior"
-            current_content = [line_stripped.replace("Ego Behavior:", "").strip()]
-        elif line_stripped.startswith("Adversarial Behavior:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Adversarial Behavior"
-            current_content = [line_stripped.replace("Adversarial Behavior:", "").strip()]
-        elif line_stripped.startswith("Spatial Relation:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Spatial Relation"
-            current_content = [line_stripped.replace("Spatial Relation:", "").strip()]
-        elif line_stripped.startswith("Requirement and restrictions:") or line_stripped.startswith("Requirements and restrictions:"):
-            if current_section and current_content:
-                result[current_section]["description"] = ' '.join(current_content).strip()
-            current_section = "Requirement and restrictions"
-            content = line_stripped.replace("Requirement and restrictions:", "").replace("Requirements and restrictions:", "").strip()
-            current_content = [content] if content else []
-        elif line_stripped and current_section:
-            current_content.append(line_stripped)
-    
-    if current_section and current_content:
-        result[current_section]["description"] = ' '.join(current_content).strip()
+        llm_data = json.loads(cleaned_response)
+        
+        if "Scenario" in llm_data:
+            result["Scenario"]["description"] = llm_data["Scenario"]
+        if "Ego" in llm_data:
+            if isinstance(llm_data["Ego"], list):
+                result["Egos"] = [{"description": ego, "code": ""} for ego in llm_data["Ego"]]
+            else:
+                result["Egos"] = [{"description": llm_data["Ego"], "code": ""}]
+        if "Egos" in llm_data and isinstance(llm_data["Egos"], list):
+            result["Egos"] = [{"description": ego, "code": ""} for ego in llm_data["Egos"]]
+        if "Adversarials" in llm_data and isinstance(llm_data["Adversarials"], list):
+            result["Adversarials"] = [{"description": adv, "code": ""} for adv in llm_data["Adversarials"]]
+        if "Spatial Relation" in llm_data:
+            result["Spatial Relation"]["description"] = llm_data["Spatial Relation"]
+        if "Requirement and restrictions" in llm_data:
+            result["Requirement and restrictions"]["description"] = llm_data["Requirement and restrictions"]
+            
+    except json.JSONDecodeError:
+        pass
     
     code_lines = scenic_code.split('\n')
     
-    ego_code = extract_section_code(code_lines, "Ego object")
-    result["Ego Vehicle"]["code"] = ego_code
+    ego_section = extract_section_code(code_lines, "Ego")
     
-    adv_code = extract_section_code(code_lines, "Adversarial object")
-    result["Adversarial Object"]["code"] = adv_code
+    if ego_section:
+        ego_objects_raw = extract_individual_objects_from_section(ego_section)
+        
+        ego_objects = []
+        for obj in ego_objects_raw:
+            if re.match(r'ego\s*=\s*new\s+', obj.strip(), re.IGNORECASE):
+                ego_objects.append(ego_section)
+                break
+        
+        if not ego_objects:
+            ego_objects = [ego_section]
+    else:
+        ego_behavior_code = extract_section_code(code_lines, "Ego Behavior")
+        ego_object_code = extract_section_code(code_lines, "Ego object")
+        
+        if ego_behavior_code or ego_object_code:
+            combined_ego = (ego_behavior_code + "\n\n" + ego_object_code).strip()
+            ego_objects = [combined_ego] if combined_ego else []
+        else:
+            ego_objects = []
     
-    ego_behavior_code = extract_section_code(code_lines, "Ego Behavior")
-    result["Ego Behavior"]["code"] = ego_behavior_code
+    if len(result["Egos"]) > 0:
+        for i, ego in enumerate(result["Egos"]):
+            if i < len(ego_objects):
+                ego["code"] = ego_objects[i]
+            else:
+                if ego_objects:
+                    ego["code"] = ego_objects[0] if len(ego_objects) == 1 else ""
+    else:
+        for ego_code in ego_objects:
+            if ego_code.strip():
+                result["Egos"].append({
+                    "description": "",
+                    "code": ego_code
+                })
     
-    adv_behavior_code = extract_section_code(code_lines, "Adversarial Behavior")
-    result["Adversarial Behavior"]["code"] = adv_behavior_code
+    adv_sections = extract_all_sections(code_lines, "Adversarial")
+    
+    adversary_objects = []
+    
+    if adv_sections:
+        for section in adv_sections:
+            objects = extract_individual_objects_from_section(
+                section,
+                r'\w+\s*=\s*new\s+' 
+            )
+            
+            if objects:
+                behavior_match = re.search(r'(behavior\s+\w+\s*\([^)]*\):.*?)(?=\n\w+\s*=\s*new\s+|\Z)', section, re.DOTALL)
+                params_and_consts = []
+                
+                for line in section.split('\n'):
+                    stripped = line.strip()
+                    if stripped.startswith('param '):
+                        params_and_consts.append(line)
+                    elif stripped and not stripped.startswith('#') and not stripped.startswith('behavior') and '=' in stripped and 'new ' not in stripped:
+                        if re.match(r'^[A-Z_][A-Z0-9_]*\s*=', stripped):
+                            params_and_consts.append(line)
+                
+                params_code = '\n'.join(params_and_consts) if params_and_consts else ""
+                behavior_code = behavior_match.group(1).strip() if behavior_match else ""
+                
+                for obj in objects:
+                    combined_parts = []
+                    if params_code:
+                        combined_parts.append(params_code)
+                    if behavior_code:
+                        combined_parts.append(behavior_code)
+                    combined_parts.append(obj)
+                    adversary_objects.append('\n\n'.join(combined_parts))
+            else:
+                if re.search(r'behavior\s+\w+\s*\(', section):
+                    adversary_objects.append(section)
+    
+    if not adversary_objects:
+        adv_behavior_code = extract_section_code(code_lines, "Adversarial Behavior")
+        adv_object_code = extract_section_code(code_lines, "Adversarial object")
+        
+        if adv_behavior_code and adv_object_code:
+            objects = extract_individual_objects_from_section(adv_object_code)
+            for obj in objects:
+                adversary_objects.append(adv_behavior_code + "\n\n" + obj)
+        elif adv_behavior_code or adv_object_code:
+            adversary_objects = extract_adversary_objects(scenic_code)
+    
+    if len(result["Adversarials"]) > 0:
+        for i, adv in enumerate(result["Adversarials"]):
+            if i < len(adversary_objects):
+                adv["code"] = adversary_objects[i]
+            else:
+                if adversary_objects:
+                    adv["code"] = adversary_objects[0] if len(adversary_objects) == 1 else ""
+    else:
+        for adv_code in adversary_objects:
+            if adv_code.strip():
+                result["Adversarials"].append({
+                    "description": "",
+                    "code": adv_code
+                })
     
     spatial_code = extract_section_code(code_lines, "Spatial Relation")
     result["Spatial Relation"]["code"] = spatial_code
@@ -197,6 +239,116 @@ def parse_logical_structure(llm_response: str, scenic_code: str) -> Dict[str, An
     return result
 
 
+def extract_individual_objects_from_section(section_code: str, object_pattern: str = None) -> list:
+    if object_pattern is None:
+        object_pattern = r'\w+\s*=\s*new\s+'
+    
+    pattern = re.compile(object_pattern, re.IGNORECASE)
+    
+    object_definitions = []
+    current_def = []
+    in_definition = False
+    
+    for line in section_code.split('\n'):
+        if pattern.search(line):
+            if current_def:
+                object_definitions.append('\n'.join(current_def).strip())
+            current_def = [line]
+            in_definition = True
+        elif in_definition:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#'):
+                current_def.append(line)
+                if not line.rstrip().endswith(',') and not line.rstrip().endswith('\\'):
+                    object_definitions.append('\n'.join(current_def).strip())
+                    current_def = []
+                    in_definition = False
+            elif stripped.startswith('#'):
+                if current_def:
+                    object_definitions.append('\n'.join(current_def).strip())
+                    current_def = []
+                    in_definition = False
+    
+    if current_def:
+        object_definitions.append('\n'.join(current_def).strip())
+    
+    return object_definitions
+
+
+def extract_adversary_objects(scenic_code: str) -> list:
+    code_lines = scenic_code.split('\n')
+    
+    adv_section = extract_section_code(code_lines, "Adversarial")
+    if not adv_section:
+        adv_behavior_code = extract_section_code(code_lines, "Adversarial Behavior")
+        adv_object_section = extract_section_code(code_lines, "Adversarial object")
+        if not adv_object_section:
+            return []
+    else:
+        adv_behavior_code = adv_section
+        adv_object_section = adv_section
+    
+    adversary_pattern = re.compile(
+        r'(adv[_\d]*|adversary[_\d]*|lead[_\d]*|ped[_\d]*|debris[_\d]*|trash[_\d]*|pedestrian[_\d]*|bicycle[_\d]*|truck[_\d]*)\s*=\s*new\s+',
+        re.IGNORECASE
+    )
+    
+    adversary_definitions = []
+    current_def = []
+    in_definition = False
+    
+    for line in adv_object_section.split('\n'):
+        if adversary_pattern.search(line):
+            if current_def:
+                adversary_definitions.append('\n'.join(current_def).strip())
+            current_def = [line]
+            in_definition = True
+        elif in_definition:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#'):
+                current_def.append(line)
+                if not line.rstrip().endswith(',') and not line.rstrip().endswith('\\'):
+                    adversary_definitions.append('\n'.join(current_def).strip())
+                    current_def = []
+                    in_definition = False
+    
+    if current_def:
+        adversary_definitions.append('\n'.join(current_def).strip())
+    
+    param_pattern = re.compile(r'param\s+\w+', re.IGNORECASE)
+    const_pattern = re.compile(r'^[A-Z_][A-Z0-9_]*\s*=', re.MULTILINE)
+    
+    params_for_adv = []
+    constants_for_adv = []
+    
+    behavior_section_lines = adv_behavior_code.split('\n') if adv_behavior_code else []
+    for line in behavior_section_lines:
+        stripped = line.strip()
+        if stripped.startswith('param '):
+            params_for_adv.append(line.strip())
+        elif stripped and not stripped.startswith('#') and not stripped.startswith('behavior'):
+            if re.match(r'^[A-Z_][A-Z0-9_]*\s*=', stripped):
+                constants_for_adv.append(line.strip())
+    
+    for line in adv_object_section.split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('param '):
+            params_for_adv.append(line.strip())
+        elif stripped and not stripped.startswith('#') and '=' in stripped and 'new ' not in stripped:
+            if re.match(r'^[A-Z_][A-Z0-9_]*\s*=', stripped):
+                constants_for_adv.append(line.strip())
+    
+    all_params = list(set(params_for_adv + constants_for_adv))
+    params_code = '\n'.join(all_params)
+    
+    complete_adversaries = []
+    for adv_def in adversary_definitions:
+        complete_code = params_code + "\n\n" + adv_behavior_code + "\n\n" + adv_def if adv_behavior_code else params_code + "\n\n" + adv_def
+        complete_adversaries.append(complete_code.strip())
+    
+    return complete_adversaries
+
+
 def extract_section_code(code_lines: list, section_header: str) -> str:
     in_section = False
     section_code = []
@@ -204,7 +356,9 @@ def extract_section_code(code_lines: list, section_header: str) -> str:
     skip_header_box = False
     
     for i, line in enumerate(code_lines):
-        if section_header in line and not in_section:
+        # Only match section headers in comment lines
+        stripped = line.strip()
+        if section_header in line and not in_section and stripped.startswith("#"):
             in_section = True
             found_section = True
             skip_header_box = True
@@ -238,6 +392,83 @@ def extract_section_code(code_lines: list, section_header: str) -> str:
     
     code = '\n'.join(section_code).strip()
     return code
+
+
+def extract_all_sections(code_lines: list, section_header: str) -> list:
+    sections = []
+    current_section = []
+    in_section = False
+    skip_header_box = False
+    
+    for i, line in enumerate(code_lines):
+        stripped = line.strip()
+        
+        is_section_header = False
+        if stripped.startswith("#") and section_header in line:
+            comment_text = stripped.replace("#", "").strip()
+            if comment_text.startswith(section_header):
+                is_section_header = True
+        
+        if is_section_header:
+            if in_section and current_section:
+                while current_section:
+                    last_line = current_section[-1].strip()
+                    if not last_line or (last_line.startswith("#####") and last_line.endswith("#####")):
+                        current_section.pop()
+                    else:
+                        break
+                if current_section:
+                    sections.append('\n'.join(current_section).strip())
+                current_section = []
+            in_section = True
+            skip_header_box = True
+            continue
+        
+        if in_section:
+            if skip_header_box and stripped.startswith("#####") and stripped.endswith("#####"):
+                skip_header_box = False
+                continue
+            
+            if stripped.startswith("#") and not stripped == "#" and len(stripped) > 10:
+                comment_text = stripped.replace("#", "").strip()
+                major_sections = ["Description", "Header", "Ego", "Adversarial", "Spatial Relation", 
+                                "Requirements and Restrictions", "Requirement and restrictions"]
+                is_different_section = False
+                for major_section in major_sections:
+                    if comment_text.startswith(major_section) and not comment_text.startswith(section_header):
+                        is_different_section = True
+                        break
+                
+                if is_different_section:
+                    if current_section:
+                        while current_section:
+                            last_line = current_section[-1].strip()
+                            if not last_line or (last_line.startswith("#####") and last_line.endswith("#####")):
+                                current_section.pop()
+                            else:
+                                break
+                        if current_section:
+                            sections.append('\n'.join(current_section).strip())
+                    in_section = False
+                    current_section = []
+                    continue
+            
+            if not current_section and not stripped:
+                continue
+                
+            current_section.append(line)
+    
+    if in_section and current_section:
+        while current_section:
+            last_line = current_section[-1].strip()
+            if not last_line or (last_line.startswith("#####") and last_line.endswith("#####")):
+                current_section.pop()
+            else:
+                break
+        if current_section:
+            sections.append('\n'.join(current_section).strip())
+    
+    return sections
 
 
 def process_scenic_file(agent: ScenicToLogicalAgent, input_path: str, output_dir: str = "results/logical_structures"):
