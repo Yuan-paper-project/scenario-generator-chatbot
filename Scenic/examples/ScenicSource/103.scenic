@@ -1,11 +1,11 @@
 #################################
-# Description                     #
+# Description                   #
 #################################
 
 description = "Ego vehicle moves to the faster lane and surpasses two adversary vehicles that were in its original lane."
 
 #################################
-# Header                          #
+# Header                        #
 #################################
 
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                    #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(6, 8)
@@ -31,17 +31,41 @@ behavior EgoBehavior():
 			target_speed=globalParameters.EGO_SPEED)
 		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED) 
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior            #
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = Range(2, 4)
+param ADV1_DIST = Range(20, 25)
 
 behavior AdversaryBehavior():
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
+adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
 #################################
-# Spatial Relation                #
+# Adversarial                   #
+#################################
+
+param ADV_SPEED = Range(2, 4)
+param ADV1_DIST = Range(20, 25)
+param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
+
+behavior AdversaryBehavior():
+	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
+#################################
+# Spatial Relation              #
 #################################
 
 initLane = Uniform(*filter(lambda lane:
@@ -51,30 +75,7 @@ egoSpawnPt = new OrientedPoint in initLane.centerline
 egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
 
 #################################
-# Ego object                      #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object              #
-#################################
-
-param ADV1_DIST = Range(20, 25)
-param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
-
-adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior()
-
-adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior()
-
-#################################
-# Requirements and Restrictions   #
+# Requirements and Restrictions #
 #################################
 
 INIT_DIST = 50

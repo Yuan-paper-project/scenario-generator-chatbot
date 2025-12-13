@@ -15,12 +15,13 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior
+# Ego
 #################################
 
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.5, 1.0)
 BYPASS_DIST = 15
+param EGO_INIT_DIST = Range(10, 15)
 
 behavior EgoBehavior():
 	while (distance to adversary) < BYPASS_DIST:
@@ -31,14 +32,43 @@ behavior EgoBehavior():
 			target_speed=globalParameters.EGO_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
+ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior
+# Adversarial
+#################################
+
+stationary = new Car at statSpawnPt,
+	with blueprint MODEL
+
+#################################
+# Adversarial
 #################################
 
 param ADV_SPEED = Range(7, 10)
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
+
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
+
+#################################
+# Adversarial
+#################################
+
+param ADV_SPEED = Range(7, 10)
+param EGO_INIT_DIST = Range(10, 15)
+
+behavior AdversaryBehavior(trajectory):
+	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
+
+adversary2 = new Car behind adversary by globalParameters.EGO_INIT_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Spatial Relation
@@ -53,31 +83,6 @@ advInitLane = statInitLane.sectionAt(statSpawnPt).laneToRight.lane
 advManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, advInitLane.maneuvers))
 advTrajectory = [advInitLane, advManeuver.connectingLane, advManeuver.endLane]
 advSpawnPt = new OrientedPoint in advInitLane.centerline
-
-#################################
-# Ego object
-#################################
-
-param EGO_INIT_DIST = Range(10, 15)
-
-ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object
-#################################
-
-stationary = new Car at statSpawnPt,
-	with blueprint MODEL
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
-
-adversary2 = new Car behind adversary by globalParameters.EGO_INIT_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions

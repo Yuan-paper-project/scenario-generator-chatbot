@@ -15,11 +15,12 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(6, 8)
 BYPASS_DIST = 15
+param ADV_SPEED = Range(2, 4)
 
 behavior EgoBehavior():
 	try:
@@ -32,14 +33,31 @@ behavior EgoBehavior():
 	interrupt when (distance to adversary_2) < BYPASS_DIST:
 		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = Range(2, 4)
+param ADV1_DIST = Range(20, 25)
 
 behavior Adversary1Behavior():
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
+	with blueprint MODEL,
+	with behavior Adversary1Behavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+param ADV_SPEED = Range(2, 4)
+param ADV1_DIST = Range(20, 25)
+param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
 
 behavior Adversary2Behavior():
 	rightLaneSec = self.laneSection.laneToRight
@@ -47,6 +65,10 @@ behavior Adversary2Behavior():
 		laneSectionToSwitch=rightLaneSec,
 		target_speed=globalParameters.ADV_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
+	with blueprint MODEL,
+	with behavior Adversary2Behavior()
 
 #################################
 # Spatial Relation              #
@@ -59,31 +81,11 @@ egoSpawnPt = new OrientedPoint in initLane.centerline
 egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
 
 #################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
+# Requirements and Restrictions #
 #################################
 
 param ADV1_DIST = Range(20, 25)
 param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
-
-adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
-	with blueprint MODEL,
-	with behavior Adversary1Behavior()
-
-adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
-	with blueprint MODEL,
-	with behavior Adversary2Behavior()
-
-#################################
-# Requirements and Restrictions #
-#################################
 
 INIT_DIST = 50
 TERM_DIST = globalParameters.ADV2_DIST + 100

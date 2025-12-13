@@ -12,7 +12,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 param EGO_SPEED = Range(7, 10)
 EGO_BRAKE = 1.0
@@ -27,24 +27,6 @@ behavior EgoBehavior():
     interrupt when withinDistanceToAnyObjs(self, CRASH_DIST):
         terminate
 
-#################################
-# Adversarial Behavior          #
-#################################
-PED_MIN_SPEED = 1.0
-PED_THRESHOLD = 20
-
-behavior PedestrianBehavior():
-    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
-
-#################################
-# Spatial Relation              #
-#################################
-lane = Uniform(*network.lanes)
-spawnPt = new OrientedPoint on lane.centerline
-
-#################################
-# Ego object                    #
-#################################
 param EGO_INIT_DIST = Range(-30, -20)
 
 ego = new Car following roadDirection from spawnPt for globalParameters.EGO_INIT_DIST,
@@ -52,12 +34,24 @@ ego = new Car following roadDirection from spawnPt for globalParameters.EGO_INIT
     with behavior EgoBehavior()
 
 #################################
-# Adversarial object            #
+# Adversarial                   #
 #################################
+PED_MIN_SPEED = 1.0
+PED_THRESHOLD = 20
+
+behavior PedestrianBehavior():
+    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
+
 ped = new Pedestrian right of spawnPt by 3,
     facing 90 deg relative to spawnPt.heading,
     with regionContainedIn None,
     with behavior PedestrianBehavior()
+
+#################################
+# Spatial Relation              #
+#################################
+lane = Uniform(*network.lanes)
+spawnPt = new OrientedPoint on lane.centerline
 
 #################################
 # Requirements and Restrictions #

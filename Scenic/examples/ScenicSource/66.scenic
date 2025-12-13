@@ -1,22 +1,19 @@
 #################################
 # Description                   #
 #################################
-
 description = "Ego vehicle goes straight and an adversary vehicle makes a left turn at 3-way intersection."
 
 #################################
 # Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.5, 1.0)
 SAFE_DIST = 20
@@ -27,19 +24,25 @@ behavior EgoBehavior(trajectory):
 	interrupt when withinDistanceToAnyObjs(self, SAFE_DIST):
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 
-#################################
-# Adversarial Behavior          #
-#################################
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
 
+#################################
+# Adversarial                   #
+#################################
 param ADV_SPEED = Range(7, 10)
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
 
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
+
 #################################
 # Spatial Relation              #
 #################################
-
 intersection = Uniform(*filter(lambda i: i.is3Way, network.intersections))
 
 egoInitLane = Uniform(*intersection.incomingLanes)
@@ -51,22 +54,6 @@ advInitLane = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT,egoManeu
 advManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.RIGHT_TURN, advInitLane.maneuvers))
 advTrajectory = [advInitLane, advManeuver.connectingLane, advManeuver.endLane]
 advSpawnPt = new OrientedPoint in advInitLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions #

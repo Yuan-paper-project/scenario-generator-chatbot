@@ -12,7 +12,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 param EGO_SPEED = Range(9, 12)
 BYPASS_DIST = 10
@@ -26,13 +26,21 @@ behavior EgoBehavior():
         do LaneChangeBehavior(laneSectionToSwitch=rightLaneSec, target_speed=globalParameters.EGO_SPEED)
         laneChangeCompleted = True
 
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 param LEAD_SPEED = Range(3, 6)
+LEAD_INIT_DIST = 10
 
 behavior LeadBehavior():
     do FollowLaneBehavior(globalParameters.LEAD_SPEED)
+
+lead = new Car following roadDirection from ego for LEAD_INIT_DIST,
+    with behavior LeadBehavior()
 
 #################################
 # Spatial Relation              #
@@ -40,20 +48,6 @@ behavior LeadBehavior():
 
 initLane = Uniform(*filter(lambda lane:all([sec._laneToRight is not None for sec in lane.sections]),network.lanes))
 egoSpawnPt = new OrientedPoint on initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-ego = new Car at egoSpawnPt,
-    with blueprint MODEL,
-    with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-LEAD_INIT_DIST = 10
-lead = new Car following roadDirection from ego for LEAD_INIT_DIST,
-    with behavior LeadBehavior()
 
 #################################
 # Requirements and Restrictions #

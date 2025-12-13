@@ -1,13 +1,11 @@
 #################################
 # Description
 #################################
-
 description = "Ego vehicle moves to the slower lane while the column of adversary vehicle passes."
 
 #################################
 # Header
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
@@ -15,9 +13,8 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior
+# Ego
 #################################
-
 param EGO_SPEED = Range(3, 5) 
 param SAFE_DIST = 15
 
@@ -33,34 +30,17 @@ behavior EgoBehavior():
 				target_speed=globalParameters.EGO_SPEED,
 				laneToFollow=slowerLane.lane) \
 
-#################################
-# Adversarial Behavior
-#################################
-
-param ADV_SPEED = Range(7, 10) #ADV2 nad ADV3 will have the same speed
-
-behavior AdversaryBehavior():
-	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
-
-#################################
-# Spatial Relation
-#################################
-
-initLane = Uniform(*network.lanes)
-egoSpawnPt = new OrientedPoint in initLane.centerline
-egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
-
-#################################
-# Ego object
-#################################
-
 ego = new Car at egoSpawnPt,
 	with blueprint MODEL,
 	with behavior EgoBehavior()
 
 #################################
-# Adversarial object
+# Adversarial
 #################################
+param ADV_SPEED = Range(7, 10) #ADV2 nad ADV3 will have the same speed
+
+behavior AdversaryBehavior():
+	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
 param ADV1_DIST = Range(-25,-20)
 param ADV2_DIST = globalParameters.ADV1_DIST + Range(-15,-10)
@@ -79,9 +59,15 @@ adversary_3 = new Car following roadDirection for globalParameters.ADV3_DIST,
 	with behavior AdversaryBehavior()
 
 #################################
+# Spatial Relation
+#################################
+initLane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint in initLane.centerline
+egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
+
+#################################
 # Requirements and Restrictions
 #################################
-
 INIT_DIST = 50
 TERM_DIST = 100
 

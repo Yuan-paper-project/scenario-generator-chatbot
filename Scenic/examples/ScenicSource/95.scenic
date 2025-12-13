@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(3, 5)
@@ -28,14 +28,29 @@ behavior EgoBehavior(trajectory):
 	interrupt when withinDistanceToAnyObjs(self, SAFE_DIST):
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+LEAD_INIT_DIST = -10
+
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
+lead = new Car following roadDirection for LEAD_INIT_DIST,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
+param EGO_SPEED = Range(3, 5)
 param ADV_SPEED = globalParameters.EGO_SPEED
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
+
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Spatial Relation              #
@@ -52,28 +67,6 @@ advInitLane = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, Uniform
 advManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, advInitLane.maneuvers))
 advTrajectory = [advInitLane, advManeuver.connectingLane, advManeuver.endLane]
 advSpawnPt = new OrientedPoint in advInitLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-LEAD_INIT_DIST = -10
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-lead = new Car following roadDirection for LEAD_INIT_DIST,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions #

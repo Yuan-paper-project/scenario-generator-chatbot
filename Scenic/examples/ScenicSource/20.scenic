@@ -14,7 +14,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -27,8 +27,12 @@ behavior EgoBehavior():
     interrupt when withinDistanceToObjsInLane(self, SAFE_DIST):
         take SetBrakeAction(EGO_BRAKE)
 
+ego = new Car following roadDirection from SpawnPt for Range(-30, -20),
+    with blueprint MODEL,
+    with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 PED_MIN_SPEED = 1.0
@@ -36,27 +40,6 @@ PED_THRESHOLD = 20
 
 behavior PedBehavior():
     do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
-
-#################################
-# Spatial Relation              #
-#################################
-
-lane = Uniform(*network.lanes)
-SpawnPt = new OrientedPoint on lane.centerline
-ObsSpawnPt = new OrientedPoint following roadDirection from SpawnPt for -3
-
-#################################
-# Ego object                    #
-#################################
-
-
-ego = new Car following roadDirection from SpawnPt for Range(-30, -20),
-    with blueprint MODEL,
-    with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
 
 pedestrian = new Pedestrian right of SpawnPt by 3,
     facing 90 deg relative to SpawnPt.heading,
@@ -66,6 +49,14 @@ pedestrian = new Pedestrian right of SpawnPt by 3,
 obstacle = new VendingMachine right of ObsSpawnPt by 3,
     facing -90 deg relative to ObsSpawnPt.heading,
     with regionContainedIn None
+
+#################################
+# Spatial Relation              #
+#################################
+
+lane = Uniform(*network.lanes)
+SpawnPt = new OrientedPoint on lane.centerline
+ObsSpawnPt = new OrientedPoint following roadDirection from SpawnPt for -3
 
 #################################
 # Requirements and Restrictions #

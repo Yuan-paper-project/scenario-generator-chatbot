@@ -12,7 +12,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.8,1.0)
@@ -24,24 +24,6 @@ behavior EgoBehavior():
     interrupt when withinDistanceToObjsInLane(self, SAFE_DIST) and (ped in network.drivableRegion):
         take SetBrakeAction(globalParameters.EGO_BRAKE)
 
-#################################
-# Adversarial Behavior          #
-#################################
-PED_MIN_SPEED = 1.0
-PED_THRESHOLD = 20
-
-behavior PedestrianBehavior():
-    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
-
-#################################
-# Spatial Relation
-#################################
-lane = Uniform(*network.lanes)
-egoSpawnPt = new OrientedPoint on lane.centerline
-
-#################################
-# Ego object
-#################################
 param EGO_INIT_DIST = Range(-30, -20)
 
 ego = new Car following roadDirection from egoSpawnPt for globalParameters.EGO_INIT_DIST,
@@ -49,8 +31,14 @@ ego = new Car following roadDirection from egoSpawnPt for globalParameters.EGO_I
     with behavior EgoBehavior()
 
 #################################
-# Adversarial object
+# Adversarial                   #
 #################################
+PED_MIN_SPEED = 1.0
+PED_THRESHOLD = 20
+
+behavior PedestrianBehavior():
+    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
+
 ped = new Pedestrian right of egoSpawnPt by 3,
     facing 90 deg relative to egoSpawnPt.heading,
     with regionContainedIn None,
@@ -62,7 +50,13 @@ ped2 = new Pedestrian right of egoSpawnPt by 4,
     with behavior PedestrianBehavior()
 
 #################################
-# Requirements and Restrictions
+# Spatial Relation              #
+#################################
+lane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint on lane.centerline
+
+#################################
+# Requirements and Restrictions #
 #################################
 INIT_DIST = 75
 TERM_DIST = 100

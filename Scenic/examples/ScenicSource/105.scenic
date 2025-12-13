@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(3, 5) #ADV2 nad ADV3 will have the same speed
@@ -23,12 +23,17 @@ param EGO_SPEED = Range(3, 5) #ADV2 nad ADV3 will have the same speed
 behavior EgoBehavior():
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV1_SPEED = Range(7, 10)
 BYPASS_DIST = [20, 10]
+param ADV1_DIST = Range(-15, -20)
 
 behavior Adversary1Behavior():
 	try:
@@ -52,6 +57,17 @@ behavior Adversary1Behavior():
 			target_speed=globalParameters.ADV1_SPEED)
 		do FollowLaneBehavior(target_speed=globalParameters.ADV1_SPEED) 
 
+adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
+	with blueprint MODEL,
+	with behavior Adversary1Behavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+param EGO_SPEED = Range(3, 5) #ADV2 nad ADV3 will have the same speed
+param ADV2_DIST = Range(15, 20)
+
 behavior Adversary2Behavior():
 	newLaneSec = self.laneSection.laneToRight
 	do LaneChangeBehavior(
@@ -59,8 +75,24 @@ behavior Adversary2Behavior():
 		target_speed=globalParameters.EGO_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
+adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
+	with blueprint MODEL,
+	with behavior Adversary2Behavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+param EGO_SPEED = Range(3, 5) #ADV2 nad ADV3 will have the same speed
+param ADV2_DIST = Range(15, 20)
+param ADV3_DIST = globalParameters.ADV2_DIST + Range(20, 25)
+
 behavior Adversary3Behavior():
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
+
+adversary_3 = new Car following roadDirection for globalParameters.ADV3_DIST,
+	with blueprint MODEL,
+	with behavior Adversary3Behavior()
 
 #################################
 # Spatial Relation              #
@@ -69,34 +101,6 @@ behavior Adversary3Behavior():
 initLane = Uniform(*filter(lambda lane:all([sec._laneToRight is not None for sec in lane.sections]),network.lanes))
 egoSpawnPt = new OrientedPoint in initLane.centerline
 egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-param ADV1_DIST = Range(-15, -20)
-param ADV2_DIST = Range(15, 20)
-param ADV3_DIST = globalParameters.ADV2_DIST + Range(20, 25)
-
-adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
-	with blueprint MODEL,
-	with behavior Adversary1Behavior()
-
-adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
-	with blueprint MODEL,
-	with behavior Adversary2Behavior()
-
-adversary_3 = new Car following roadDirection for globalParameters.ADV3_DIST,
-	with blueprint MODEL,
-	with behavior Adversary3Behavior()
 
 #################################
 # Requirements and Restrictions #

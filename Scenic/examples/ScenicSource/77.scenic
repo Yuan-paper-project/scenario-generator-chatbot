@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -31,14 +31,22 @@ behavior EgoBehavior(trajectory):
 	interrupt when withinDistanceToAnyObjs(self, CRASH_DIST):
 		terminate
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = Range(7, 10)
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
+
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Spatial Relation              #
@@ -55,23 +63,6 @@ egoInitLane = Uniform(*filter(lambda m:m.type is ManeuverType.STRAIGHT,advManeuv
 egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.LEFT_TURN, egoInitLane.maneuvers))
 egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
 egoSpawnPt = new OrientedPoint in egoInitLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions #

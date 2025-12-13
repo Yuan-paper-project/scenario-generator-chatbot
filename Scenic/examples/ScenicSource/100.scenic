@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -40,8 +40,13 @@ behavior EgoBehavior():
 		interrupt when (distance to lead) < SAFE_DIST:
 			take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_INIT_SPEED = Range(2, 4)
@@ -53,6 +58,19 @@ behavior AdversaryBehavior():
 		until self.lane is not ego.lane
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_END_SPEED)
 
+param ADV_DIST = Range(10, 15)
+
+adversary = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+param EGO_SPEED = Range(7, 10)
+param EGO_BRAKE = Range(0.7, 1.0)
+
 LEAD_SPEED = globalParameters.EGO_SPEED - 4
 LEAD_BRAKE = globalParameters.EGO_BRAKE
 
@@ -63,37 +81,19 @@ behavior LeadBehavior():
 			target_speed=LEAD_SPEED)
 	take SetBrakeAction(LEAD_BRAKE)
 
-#################################
-# Spatial Relation              #
-#################################
-
-initLane = Uniform(*network.lanes)
-egoSpawnPt = new OrientedPoint in initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
 param ADV_DIST = Range(10, 15)
-
-adversary = new Car following roadDirection for globalParameters.ADV_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior()
-
 LEAD_DIST = globalParameters.ADV_DIST + 10
 
 lead = new Car following roadDirection for LEAD_DIST,
 	with blueprint MODEL,
 	with behavior LeadBehavior()
 
+#################################
+# Spatial Relation              #
+#################################
+
+initLane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint in initLane.centerline
 #################################
 # Requirements and Restrictions #
 #################################

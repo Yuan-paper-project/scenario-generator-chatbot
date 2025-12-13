@@ -14,7 +14,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -27,8 +27,12 @@ behavior EgoBehavior(trajectory):
 	interrupt when withinDistanceToAnyObjs(self, SAFE_DIST) and (ped in network.drivableRegion):
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 PED_MIN_SPEED = 1.0
@@ -36,33 +40,6 @@ PED_THRESHOLD = 20
 
 behavior PedestrianBehavior():
     do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
-
-#################################
-# Spatial Relation              #
-#################################
-
-intersection = Uniform(*filter(lambda i: i.is4Way or i.is3Way, network.intersections))
-
-egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, intersection.maneuvers))
-egoInitLane = egoManeuver.startLane
-egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
-egoSpawnPt = new OrientedPoint in egoInitLane.centerline
-
-tempManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, egoManeuver.reverseManeuvers))
-tempInitLane = tempManeuver.startLane
-tempSpawnPt = tempInitLane.centerline[-1]
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-    with blueprint MODEL,
-    with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
 
 ped = new Pedestrian at tempSpawnPt,
     facing -90 deg relative to ego.heading,
@@ -78,6 +55,21 @@ ped3 = new Pedestrian ahead of tempSpawnPt by 2,
     facing -90 deg relative to ego.heading,
     with regionContainedIn None,
     with behavior PedestrianBehavior()
+
+#################################
+# Spatial Relation              #
+#################################
+
+intersection = Uniform(*filter(lambda i: i.is4Way or i.is3Way, network.intersections))
+
+egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, intersection.maneuvers))
+egoInitLane = egoManeuver.startLane
+egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
+egoSpawnPt = new OrientedPoint in egoInitLane.centerline
+
+tempManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, egoManeuver.reverseManeuvers))
+tempInitLane = tempManeuver.startLane
+tempSpawnPt = tempInitLane.centerline[-1]
 
 #################################
 # Requirements and Restrictions #

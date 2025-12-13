@@ -11,9 +11,10 @@ description = "Ego vehicle goes right at 4-way intersection."
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
+MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -22,8 +23,12 @@ param EGO_BRAKE = Range(0.5, 1.0)
 behavior EgoBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.EGO_SPEED, trajectory=trajectory)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 
@@ -37,21 +42,6 @@ egoInitLane = Uniform(*intersection.incomingLanes)
 egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.RIGHT_TURN, egoInitLane.maneuvers))
 egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
 egoSpawnPt = new OrientedPoint in egoInitLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-MODEL = 'vehicle.mini.cooper_s_2021'
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
 
 #################################
 # Requirements and Restrictions #

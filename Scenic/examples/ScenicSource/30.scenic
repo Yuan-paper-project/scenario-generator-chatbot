@@ -13,7 +13,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior
+# Ego
 #################################
 param EGO_SPEED = Range(7, 10)
 EGO_BRAKE = 1.0
@@ -21,14 +21,23 @@ EGO_BRAKE = 1.0
 behavior EgoBehavior(trajectory):
     do FollowTrajectoryBehavior(target_speed=globalParameters.EGO_SPEED, trajectory=trajectory)
 
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior
+# Adversarial
 #################################
 PED_MIN_SPEED = 1.0
 PED_THRESHOLD = 20
 
 behavior PedestrianBehavior():
     do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
+
+ped = new Pedestrian left of tempSpawnPt by 10,
+    facing ego.heading,
+    with regionContainedIn None,
+    with behavior PedestrianBehavior()
 
 #################################
 # Spatial Relation
@@ -41,21 +50,6 @@ egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
 egoSpawnPt = new OrientedPoint in egoInitLane.centerline
 
 tempSpawnPt = egoInitLane.centerline[-1]
-
-#################################
-# Ego object
-#################################
-ego = new Car at egoSpawnPt,
-    with blueprint MODEL,
-    with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object
-#################################
-ped = new Pedestrian left of tempSpawnPt by 10,
-    facing ego.heading,
-    with regionContainedIn None,
-    with behavior PedestrianBehavior()
 
 #################################
 # Requirements and Restrictions

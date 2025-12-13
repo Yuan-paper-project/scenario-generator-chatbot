@@ -13,15 +13,16 @@ param carla_map = 'Town05'
 model scenic.simulators.carla.model
 
 MODEL = 'vehicle.mini.cooper_s_2021'
-SAFE_DIST = 20
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_INIT_DIST = Range(-30, -20)
 param EGO_SPEED = Range(9, 10)
 param EGO_BRAKE = Range(0.8,1.0)
+
+SAFE_DIST = 20
 
 behavior EgoBehavior():
     try:
@@ -29,16 +30,19 @@ behavior EgoBehavior():
     interrupt when withinDistanceToObjsInLane(self, SAFE_DIST) and (ped in network.drivableRegion):
         take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+ego = new Car following roadDirection from egoSpawnPt for globalParameters.EGO_INIT_DIST,
+    with blueprint MODEL,
+    with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_INIT_DIST = Range(40, 50)
 param ADV_SPEED = Range(9, 10)
 param ADV_BRAKE = Range(0.8,1.0)
 
-PED_MIN_SPEED = 1.0
-PED_THRESHOLD = 20
+SAFE_DIST = 20
 
 behavior AdvBehavior():
     try:
@@ -46,8 +50,25 @@ behavior AdvBehavior():
     interrupt when (withinDistanceToObjsInLane(self, SAFE_DIST) or (distance from adv to ped) < 10) and (ped in network.drivableRegion):
         take SetBrakeAction(globalParameters.ADV_BRAKE)
 
+adv = new Car left of advSpawnPt by 3,
+    with blueprint MODEL,
+    facing 180 deg relative to egoSpawnPt.heading,
+    with behavior AdvBehavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+PED_MIN_SPEED = 1.0
+PED_THRESHOLD = 20
+
 behavior PedestrianBehavior():
     do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
+
+ped = new Pedestrian right of egoSpawnPt by 3,
+    facing 90 deg relative to egoSpawnPt.heading,
+    with regionContainedIn None,
+    with behavior PedestrianBehavior()
 
 #################################
 # Spatial Relation              #
@@ -57,28 +78,6 @@ road = Uniform(*filter(lambda r: len(r.forwardLanes.lanes) == len(r.backwardLane
 egoLane = Uniform(road.forwardLanes.lanes)[0]
 egoSpawnPt = new OrientedPoint on egoLane.centerline
 advSpawnPt = new OrientedPoint following roadDirection from egoSpawnPt for globalParameters.ADV_INIT_DIST
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car following roadDirection from egoSpawnPt for globalParameters.EGO_INIT_DIST,
-    with blueprint MODEL,
-    with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-ped = new Pedestrian right of egoSpawnPt by 3,
-    facing 90 deg relative to egoSpawnPt.heading,
-    with regionContainedIn None,
-    with behavior PedestrianBehavior()
-
-adv = new Car left of advSpawnPt by 3,
-    with blueprint MODEL,
-    facing 180 deg relative to egoSpawnPt.heading,
-    with behavior AdvBehavior()
 
 #################################
 # Requirements and Restrictions #

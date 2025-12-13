@@ -1,7 +1,6 @@
 #################################
 # Description                   #
 #################################
-
 description = "Ego vehicle is following an adversary vehicle. Adversary suddenly stops and then resumes moving forward. Ego stops when safety distance is violated."
 
 #################################
@@ -13,7 +12,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 param EGO_SPEED = Range(3, 5)
 param EGO_BRAKE = Range(0.5, 1.0)
@@ -23,9 +22,12 @@ behavior EgoBehavior():
         do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
     interrupt when withinDistanceToAnyObjs(self,SAFE_DIST):
         take SetBrakeAction(globalParameters.EGO_BRAKE)
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior()
 
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 behavior BrakeBehavior(brake):
     take SetBrakeAction(brake)
@@ -41,29 +43,16 @@ behavior AdvBehavior():
     do BrakeBehavior(globalParameters.ADV_BRAKE) for ADV_STOP_TIME seconds
     print("racheced resume")
     do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
-
-#################################
-# Spatial Relation              #
-#################################
-
-initLane = Uniform(*network.lanes)
-egoSpawnPt = new OrientedPoint in initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-    with blueprint MODEL,
-    with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
 ADV_INIT_DIST = Range(22, 25)
 adv = new Car following roadDirection from ego for ADV_INIT_DIST,
     with blueprint MODEL,
     with behavior AdvBehavior()
+
+#################################
+# Spatial Relation              #
+#################################
+initLane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint in initLane.centerline
 
 #################################
 # Requirements and Restrictions #

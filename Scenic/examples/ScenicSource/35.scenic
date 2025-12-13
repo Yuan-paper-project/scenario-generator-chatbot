@@ -1,13 +1,11 @@
 #################################
-# DESCRIPTION                   #
+# Description                   #
 #################################
-
 description = "Ego vehicle overtakes one adversary vehicle but then performs an energency brake as there is the second adversary in ego vehicle in the same lane. After this, Ego vehicle starts following the second adversary vehicle in the same speed."
 
 #################################
-# HEADER                        #
+# Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
@@ -15,12 +13,12 @@ MODEL = 'vehicle.mini.cooper_s_2021'
 param ADV_SPEED = Range(2, 4)
 
 #################################
-# EGO BEHAVIOR                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(6, 8)
 param EGO_BRAKE = Range(0.7, 1.0)
 BYPASS_DIST = 15
+param ADV_SPEED = Range(2, 4)
 
 behavior EgoBehavior():
 	try:
@@ -34,12 +32,29 @@ behavior EgoBehavior():
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# ADVERSARIAL BEHAVIOR          #
+# Adversarial                   #
 #################################
+param ADV1_DIST = Range(20, 25)
+param ADV_SPEED = Range(2, 4)
 
 behavior Adversary1Behavior():
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
+	with blueprint MODEL,
+	with behavior Adversary1Behavior()
+
+#################################
+# Adversarial                   #
+#################################
+param ADV1_DIST = Range(20, 25)
+param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
+param ADV_SPEED = Range(2, 4)
 
 behavior Adversary2Behavior():
 	rightLaneSec = self.laneSection.laneToRight
@@ -48,10 +63,13 @@ behavior Adversary2Behavior():
 		target_speed=globalParameters.ADV_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
-#################################
-# SPATIAL RELATION              #
-#################################
+adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
+	with blueprint MODEL,
+	with behavior Adversary2Behavior()
 
+#################################
+# Spatial Relation              #
+#################################
 initLane = Uniform(*filter(lambda lane:
 	all([sec._laneToRight is not None for sec in lane.sections]),
 	network.lanes))
@@ -59,32 +77,8 @@ egoSpawnPt = new OrientedPoint in initLane.centerline
 egoLaneSecToSwitch = initLane.sectionAt(egoSpawnPt).laneToRight
 
 #################################
-# EGO OBJECT                    #
+# Requirements and Restrictions #
 #################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# ADVERSARIAL OBJECT            #
-#################################
-
-param ADV1_DIST = Range(20, 25)
-param ADV2_DIST = globalParameters.ADV1_DIST + Range(15, 20)
-
-adversary_1 = new Car following roadDirection for globalParameters.ADV1_DIST,
-	with blueprint MODEL,
-	with behavior Adversary1Behavior()
-
-adversary_2 = new Car following roadDirection for globalParameters.ADV2_DIST,
-	with blueprint MODEL,
-	with behavior Adversary2Behavior()
-
-#################################
-# REQUIREMENTS AND RESTRICTIONS #
-#################################
-
 INIT_DIST = 50
 TERM_DIST = globalParameters.ADV2_DIST + 100
 

@@ -1,13 +1,11 @@
 #################################
 # Description                   #
 #################################
-
 description = "Adversary vehicle performs a lane change to bypass the slow ego vehicle before returning to its original lane."
 
 #################################
 # Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
@@ -15,18 +13,20 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(2, 4)
 
 behavior EgoBehavior():
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
-#################################
-# Adversarial Behavior          #
-#################################
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
 
+#################################
+# Adversarial                   #
+#################################
 param ADV_SPEED = Range(7, 10)
 BYPASS_DIST = [15, 10]
 
@@ -46,26 +46,7 @@ behavior AdversaryBehavior():
 		do LaneChangeBehavior(
 				laneSectionToSwitch=slowerLaneSec,
 				target_speed=globalParameters.ADV_SPEED)
-		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED) 
-
-#################################
-# Spatial Relation              #
-#################################
-
-initLane = Uniform(*network.lanes)
-egoSpawnPt = new OrientedPoint in initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
+		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
 
 param ADV_DIST = Range(-25, -10)
 
@@ -74,9 +55,16 @@ adversary = new Car following roadDirection for globalParameters.ADV_DIST,
 	with behavior AdversaryBehavior()
 
 #################################
-# Requirements and Restrictions #
+# Spatial Relation              #
 #################################
 
+initLane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint in initLane.centerline
+
+
+#################################
+# Requirements and Restrictions #
+#################################
 INIT_DIST = 50
 TERM_DIST = 100
 
@@ -84,4 +72,3 @@ require (distance to intersection) > INIT_DIST
 require (distance from adversary to intersection) > INIT_DIST
 require always (ego.laneSection._fasterLane is not None)
 terminate when (distance to egoSpawnPt) > TERM_DIST
-```

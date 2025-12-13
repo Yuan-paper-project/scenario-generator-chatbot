@@ -15,12 +15,13 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.5, 1.0)
 SAFE_DIST = 20
+EGO_INIT_DIST = [20, 25]
 
 behavior EgoBehavior(trajectory):
 	try:
@@ -28,19 +29,46 @@ behavior EgoBehavior(trajectory):
 	interrupt when withinDistanceToAnyObjs(self, SAFE_DIST):
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Ego                           #
+#################################
+
+param EGO_SPEED = Range(7, 10)
+param EGO_BRAKE = Range(0.5, 1.0)
+SAFE_DIST = 20
+LEAD_INIT_DIST = 10
+
+behavior EgoBehavior(trajectory):
+	try:
+		do FollowTrajectoryBehavior(target_speed=globalParameters.EGO_SPEED, trajectory=trajectory)
+	interrupt when withinDistanceToAnyObjs(self, SAFE_DIST):
+		take SetBrakeAction(globalParameters.EGO_BRAKE)
+
+lead = new Car following roadDirection for LEAD_INIT_DIST,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
+#################################
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = globalParameters.EGO_SPEED
+ADV_INIT_DIST = [15, 20]
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
 
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
+
 #################################
 # Spatial Relation              #
 #################################
-
 
 intersection = Uniform(*filter(lambda i: i.is4Way, network.intersections))
 
@@ -55,34 +83,12 @@ advTrajectory = [advInitLane, advManeuver.connectingLane, advManeuver.endLane]
 advSpawnPt = new OrientedPoint in advInitLane.centerline
 
 #################################
-# Ego object                    #
-#################################
-
-EGO_INIT_DIST = [20, 25]
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-LEAD_INIT_DIST = 10
-
-lead = new Car following roadDirection for LEAD_INIT_DIST,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
-
-#################################
 # Requirements and Restrictions #
 #################################
 
 ADV_INIT_DIST = [15, 20]
 TERM_DIST = 70
+EGO_INIT_DIST = [20, 25]
 
 require EGO_INIT_DIST[0] <= (distance to intersection) <= EGO_INIT_DIST[1]
 require ADV_INIT_DIST[0] <= (distance from adversary to intersection) <= ADV_INIT_DIST[1]

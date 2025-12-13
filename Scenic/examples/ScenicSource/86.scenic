@@ -1,35 +1,35 @@
 #################################
 # Description                   #
 #################################
-
 description = "Ego vehicle goes left at 3-way intersection."
 
 #################################
 # Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(7, 10)
 
 behavior EgoBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.EGO_SPEED, trajectory=trajectory)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior(egoTrajectory)
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 #################################
 # Spatial Relation              #
 #################################
-
 intersection = Uniform(*filter(lambda i: i.is3Way, network.intersections))
 
 egoInitLane = Uniform(*intersection.incomingLanes)
@@ -37,23 +37,9 @@ egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.LEFT_TURN, egoIni
 egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
 egoSpawnPt = new OrientedPoint in egoInitLane.centerline
 
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
 #################################
 # Requirements and Restrictions #
 #################################
-
 EGO_INIT_DIST = [20, 40]
 TERM_DIST = 100
 

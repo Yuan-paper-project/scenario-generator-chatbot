@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -31,8 +31,14 @@ behavior EgoBehavior():
 			target_speed=globalParameters.EGO_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
+param EGO_INIT_DIST = Range(10, 15)
+
+ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 ADV_SPEED = 10
@@ -40,13 +46,17 @@ ADV_SPEED = 10
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=ADV_SPEED, trajectory=trajectory)
 
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
+
 #################################
 # Spatial Relation              #
 #################################
 
 intersection = Uniform(*filter(lambda i: i.is4Way, network.intersections))
 
-statInitLane = Uniform(*filter(lambda lane: 
+statInitLane = Uniform(*filter(lambda lane:
 	all([sec._laneToRight is not None for sec in lane.sections]),
 	intersection.incomingLanes))
 statSpawnPt = new OrientedPoint in statInitLane.centerline
@@ -55,24 +65,6 @@ advInitLane = statInitLane.sectionAt(statSpawnPt).laneToRight.lane
 advManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.STRAIGHT, advInitLane.maneuvers))
 advTrajectory = [advInitLane, advManeuver.connectingLane, advManeuver.endLane]
 advSpawnPt = new OrientedPoint in advInitLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-param EGO_INIT_DIST = Range(10, 15)
-
-ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions #
@@ -88,4 +80,3 @@ stationary = new Car at statSpawnPt,
 require STAT_INIT_DIST[0] <= (distance from stationary to intersection) <= STAT_INIT_DIST[1]
 require ADV_INIT_DIST[0] <= (distance from adversary to intersection) <= ADV_INIT_DIST[1]
 terminate when (distance to statSpawnPt) > TERM_DIST
-```

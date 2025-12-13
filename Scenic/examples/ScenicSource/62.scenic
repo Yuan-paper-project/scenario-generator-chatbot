@@ -1,13 +1,11 @@
 #################################
 # Description                   #
 #################################
-
 description = "Ego vehicle waits at 3-way intersection while adversary vehicle in adjacent lane passes before performing a lane change to bypass a stationary vehicle."
 
 #################################
 # Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
@@ -15,9 +13,8 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.5, 1.0)
 BYPASS_DIST = 8
@@ -31,19 +28,27 @@ behavior EgoBehavior():
 			target_speed=globalParameters.EGO_SPEED)
 	do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
 
-#################################
-# Adversarial Behavior          #
-#################################
+param EGO_INIT_DIST = Range(10, 15)
 
+ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
+#################################
+# Adversarial                   #
+#################################
 param ADV_SPEED = Range(7, 10)
 
 behavior AdversaryBehavior(trajectory):
 	do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
 
+adversary = new Car at advSpawnPt,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior(advTrajectory)
+
 #################################
 # Spatial Relation              #
 #################################
-
 intersection = Uniform(*filter(lambda i: i.is3Way, network.intersections))
 
 statInitLane = Uniform(*filter(lambda lane: all([sec._laneToRight is not None for sec in lane.sections]),intersection.incomingLanes))
@@ -56,24 +61,6 @@ advSpawnPt = new OrientedPoint in advInitLane.centerline
 
 stationary = new Car at statSpawnPt,
 	with blueprint MODEL
-
-#################################
-# Ego object                    #
-#################################
-
-param EGO_INIT_DIST = Range(10, 15)
-
-ego = new Car behind stationary by globalParameters.EGO_INIT_DIST,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car at advSpawnPt,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior(advTrajectory)
 
 #################################
 # Requirements and Restrictions #

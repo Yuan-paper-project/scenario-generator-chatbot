@@ -13,10 +13,9 @@ param carla_map = 'Town05'
 model scenic.simulators.carla.model
 
 MODEL = 'vehicle.mini.cooper_s_2021'
-BARRIER = 'static.prop.streetbarrier'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -40,10 +39,29 @@ behavior EgoBehavior():
 				target_speed=globalParameters.EGO_SPEED)
 		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED) 
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
+BARRIER = 'static.prop.streetbarrier'
+
+barrier = new Barrier right of barrierSpawnPt by 1,
+    with blueprint BARRIER,
+    facing -90 deg relative to barrierSpawnPt.heading
+
+#################################
+# Adversarial                   #
+#################################
+
+BARRIER = 'static.prop.streetbarrier'
+
+barrier2 = new Barrier right of barrierSpawnPt by 2,
+    with blueprint BARRIER,
+    facing -90 deg relative to barrierSpawnPt.heading
 
 #################################
 # Spatial Relation              #
@@ -52,26 +70,6 @@ behavior EgoBehavior():
 initLane = Uniform(*network.lanes)
 egoSpawnPt = new OrientedPoint in initLane.centerline
 barrierSpawnPt = new OrientedPoint following roadDirection from egoSpawnPt for 30
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-barrier = new Barrier right of barrierSpawnPt by 1,
-    with blueprint BARRIER,
-    facing -90 deg relative to barrierSpawnPt.heading
-
-barrier2 = new Barrier right of barrierSpawnPt by 2,
-    with blueprint BARRIER,
-    facing -90 deg relative to barrierSpawnPt.heading
 
 #################################
 # Requirements and Restrictions #

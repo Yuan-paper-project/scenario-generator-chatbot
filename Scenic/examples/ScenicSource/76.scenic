@@ -14,7 +14,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -37,34 +37,25 @@ behavior EgoBehavior(speed=10):
 				laneSectionToSwitch=slowerLaneSec,
 				target_speed=globalParameters.EGO_SPEED)
 
-#################################
-# Adversarial Behavior          #
-#################################
-
-
-#################################
-# Spatial Relation              #
-#################################
-
-lane = Uniform(*network.lanes)
 egoSpawnPt = new OrientedPoint on lane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
 
 ego = new Car at egoSpawnPt,
     with blueprint MODEL,
     with behavior EgoBehavior()
 
 #################################
-# Adversarial object            #
+# Adversarial                   #
 #################################
 
 debris1 = new Debris following roadDirection for Range(20, 25)
 debris2 = new Debris following roadDirection from debris1 for Range(5, 10)
 debris3 = new Debris following roadDirection from debris2 for Range(5, 10)
+
+#################################
+# Spatial Relation              #
+#################################
+
+lane = Uniform(*network.lanes)
 
 #################################
 # Requirements and Restrictions #

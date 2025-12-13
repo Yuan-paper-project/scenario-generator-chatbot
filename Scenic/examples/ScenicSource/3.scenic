@@ -14,7 +14,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -42,19 +42,35 @@ behavior EgoBehavior():
 			interrupt when (distance to lead) > SAFE_DIST:
 				do FollowLaneBehavior(target_speed=LEAD_SPEED)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_DIST = Range(10, 15)
 param ADV_INIT_SPEED = Range(2, 4)
 param ADV_END_SPEED = 2 * Range(7, 10)
-LEAD_DIST = globalParameters.ADV_DIST + 10
 
 behavior AdversaryBehavior():
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_INIT_SPEED) \
 		until self.lane is not ego.lane
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_END_SPEED)
+
+adversary = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
+#################################
+# Adversarial                   #
+#################################
+
+param ADV_DIST = Range(10, 15)
+LEAD_DIST = globalParameters.ADV_DIST + 10
+param EGO_SPEED = Range(7, 10)
+LEAD_SPEED = globalParameters.EGO_SPEED - 4
 
 behavior LeadBehavior():
 	fasterLaneSec = self.laneSection.fasterLane
@@ -63,32 +79,16 @@ behavior LeadBehavior():
 			target_speed=LEAD_SPEED)
 	do FollowLaneBehavior(target_speed=LEAD_SPEED)
 
+lead = new Car following roadDirection for LEAD_DIST,
+	with blueprint MODEL,
+	with behavior LeadBehavior()
+
 #################################
 # Spatial Relation              #
 #################################
 
 initLane = Uniform(*network.lanes)
 egoSpawnPt = new OrientedPoint in initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-adversary = new Car following roadDirection for globalParameters.ADV_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior()
-
-lead = new Car following roadDirection for LEAD_DIST,
-	with blueprint MODEL,
-	with behavior LeadBehavior()
 
 #################################
 # Requirements and Restrictions #

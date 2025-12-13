@@ -1,13 +1,11 @@
 #################################
 # Description                   #
 #################################
-
 description = "Ego vehicle is performing an unprotected left turn at an intersection, yielding to oncoming traffic (adversary vehicle)."
 
 #################################
 # Header                        #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
@@ -15,12 +13,12 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
-
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.5, 1.0)
 SAFE_DIST = 20
+EGO_INIT_DIST = [25, 30]
 
 behavior EgoBehavior(trajectory):
     try:
@@ -28,19 +26,26 @@ behavior EgoBehavior(trajectory):
     interrupt when withinDistanceToAnyObjs(self, SAFE_DIST):
         take SetBrakeAction(globalParameters.EGO_BRAKE)
 
-#################################
-# Adversarial Behavior          #
-#################################
+ego =  new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior(egoTrajectory)
 
+#################################
+# Adversarial                   #
+#################################
 param ADV_SPEED = Range(7, 10)
+ADV_INIT_DIST = [15, 20]
 
 behavior AdvBehavior(trajectory):
     do FollowTrajectoryBehavior(target_speed=globalParameters.ADV_SPEED, trajectory=trajectory)
 
+adv = new Car at advSpawnPt,
+    with blueprint MODEL,
+    with behavior AdvBehavior(advTrajectory)
+
 #################################
 # Spatial Relation              #
 #################################
-
 intersection = Uniform(*filter(lambda i: i.is4Way, network.intersections))
 
 egoInitLane = Uniform(*intersection.incomingLanes)
@@ -53,29 +58,8 @@ advTrajectory = [advManeuver.startLane, advManeuver.connectingLane, advManeuver.
 advSpawnPt = new OrientedPoint in advManeuver.startLane.centerline
 
 #################################
-# Ego object                    #
-#################################
-
-EGO_INIT_DIST = [25, 30]
-
-ego =  new Car at egoSpawnPt,
-    with blueprint MODEL,
-    with behavior EgoBehavior(egoTrajectory)
-
-#################################
-# Adversarial object            #
-#################################
-
-ADV_INIT_DIST = [15, 20]
-
-adv = new Car at advSpawnPt,
-    with blueprint MODEL,
-    with behavior AdvBehavior(advTrajectory)
-
-#################################
 # Requirements and Restrictions #
 #################################
-
 TERM_DIST = 70
 
 # make sure the ego and adv are spawned in opposite lanes

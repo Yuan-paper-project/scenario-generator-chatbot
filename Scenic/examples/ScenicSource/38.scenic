@@ -1,24 +1,20 @@
 #################################
-# Description
+# Description                     #
 #################################
-
 description = "Ego vehicle makes a left turn at an intersection and must stop to avoid collision when two pedestrians cross the crosswalk."
 
 #################################
-# Header
+# Header                          #
 #################################
-
 param map = localPath('../../assets/maps/CARLA/Town05.xodr')
 param carla_map = 'Town05'
 model scenic.simulators.carla.model
 
 MODEL = 'vehicle.mini.cooper_s_2021'
 
-
 #################################
-# Ego Behavior
+# Ego                             #
 #################################
-
 param EGO_SPEED = Range(7, 10)
 param EGO_BRAKE = Range(0.8,1.0)
 SAFE_DIST = 20
@@ -29,42 +25,18 @@ behavior EgoBehavior(trajectory):
     interrupt when withinDistanceToAnyObjs(self, SAFE_DIST) and (ped in network.drivableRegion):
         take SetBrakeAction(globalParameters.EGO_BRAKE)
 
-#################################
-# Adversarial Behavior
-#################################
-
-PED_MIN_SPEED = 1.0
-PED_THRESHOLD = 20
-
-behavior PedestrianBehavior():
-    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
-
-#################################
-# Spatial Relation
-#################################
-
-intersection = Uniform(*filter(lambda i: i.is4Way or i.is3Way, network.intersections))
-
-egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.LEFT_TURN, intersection.maneuvers))
-egoInitLane = egoManeuver.startLane
-egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
-egoSpawnPt = new OrientedPoint in egoInitLane.centerline
-
-tempManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.RIGHT_TURN, egoManeuver.reverseManeuvers))
-tempInitLane = tempManeuver.startLane
-tempSpawnPt = tempInitLane.centerline[-1]
-
-#################################
-# Ego object
-#################################
-
 ego = new Car at egoSpawnPt,
     with blueprint MODEL,
     with behavior EgoBehavior(egoTrajectory)
 
 #################################
-# Adversarial object
+# Adversarial                     #
 #################################
+PED_MIN_SPEED = 1.0
+PED_THRESHOLD = 20
+
+behavior PedestrianBehavior():
+    do CrossingBehavior(ego, PED_MIN_SPEED, PED_THRESHOLD)
 
 ped = new Pedestrian right of tempSpawnPt by 3,
     facing ego.heading,
@@ -77,7 +49,21 @@ ped2 = new Pedestrian right of tempSpawnPt by 4,
     with behavior PedestrianBehavior()
 
 #################################
-# Requirements and Restrictions
+# Spatial Relation                #
+#################################
+intersection = Uniform(*filter(lambda i: i.is4Way or i.is3Way, network.intersections))
+
+egoManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.LEFT_TURN, intersection.maneuvers))
+egoInitLane = egoManeuver.startLane
+egoTrajectory = [egoInitLane, egoManeuver.connectingLane, egoManeuver.endLane]
+egoSpawnPt = new OrientedPoint in egoInitLane.centerline
+
+tempManeuver = Uniform(*filter(lambda m: m.type is ManeuverType.RIGHT_TURN, egoManeuver.reverseManeuvers))
+tempInitLane = tempManeuver.startLane
+tempSpawnPt = tempInitLane.centerline[-1]
+
+#################################
+# Requirements and Restrictions   #
 #################################
 EGO_INIT_DIST = [20, 25]
 TERM_DIST = 100

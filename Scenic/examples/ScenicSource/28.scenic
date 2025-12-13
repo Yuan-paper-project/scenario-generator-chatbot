@@ -16,11 +16,12 @@ MODEL = 'vehicle.mini.cooper_s_2021'
 BYPASS_DIST = [15, 10]
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(2, 4)
 param EGO_BRAKE = Range(0.5, 1.0)
+BYPASS_DIST = [15, 10] # Duplicated as used by Ego
 
 behavior EgoBehaviour():
 	try:
@@ -28,11 +29,17 @@ behavior EgoBehaviour():
 	interrupt when withinDistanceToAnyObjs(self, BYPASS_DIST[0]):
 		take SetBrakeAction(globalParameters.EGO_BRAKE)
 
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehaviour()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = Range(7, 10)
+BYPASS_DIST = [15, 10] # Duplicated as used by Adversarial
+param ADV_DIST = Range(-25, -10)
 
 behavior AdversaryBehavior():
 	try:
@@ -50,7 +57,11 @@ behavior AdversaryBehavior():
 		do LaneChangeBehavior(
 				laneSectionToSwitch=slowerLaneSec,
 				target_speed=globalParameters.ADV_SPEED)
-		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED) 
+		do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adversary = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
 
 #################################
 # Spatial Relation              #
@@ -58,24 +69,6 @@ behavior AdversaryBehavior():
 
 initLane = Uniform(*network.lanes)
 egoSpawnPt = new OrientedPoint in initLane.centerline
-
-#################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehaviour()
-
-#################################
-# Adversarial object            #
-#################################
-
-param ADV_DIST = Range(-25, -10)
-
-adversary = new Car following roadDirection for globalParameters.ADV_DIST,
-	with blueprint MODEL,
-	with behavior AdversaryBehavior()
 
 #################################
 # Requirements and Restrictions #

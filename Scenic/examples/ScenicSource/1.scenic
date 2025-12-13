@@ -15,7 +15,7 @@ model scenic.simulators.carla.model
 MODEL = 'vehicle.mini.cooper_s_2021'
 
 #################################
-# Ego Behavior                  #
+# Ego                           #
 #################################
 
 param EGO_SPEED = Range(7, 10)
@@ -40,14 +40,24 @@ behavior EgoBehavior():
 				target_speed=globalParameters.EGO_SPEED)
 		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED) 
 
+
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
 #################################
-# Adversarial Behavior          #
+# Adversarial                   #
 #################################
 
 param ADV_SPEED = Range(2, 4)
+param ADV_DIST = Range(10, 25)
 
 behavior AdvBehavior():
 	do FollowLaneBehavior(target_speed=globalParameters.ADV_SPEED)
+
+adv = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdvBehavior()
 
 #################################
 # Spatial Relation              #
@@ -57,27 +67,8 @@ initLane = Uniform(*network.lanes)
 egoSpawnPt = new OrientedPoint in initLane.centerline
 
 #################################
-# Ego object                    #
-#################################
-
-ego = new Car at egoSpawnPt,
-	with blueprint MODEL,
-	with behavior EgoBehavior()
-
-#################################
-# Adversarial object            #
-#################################
-
-param ADV_DIST = Range(10, 25)
-
-adv = new Car following roadDirection for globalParameters.ADV_DIST,
-	with blueprint MODEL,
-	with behavior AdvBehavior()
-
-#################################
 # Requirements and Restrictions #
 #################################
-
 INIT_DIST = 50
 TERM_DIST = 100
 
