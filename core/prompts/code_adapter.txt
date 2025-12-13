@@ -1,15 +1,12 @@
-Task: Update the Scenic code by replacing the description line with the user's new scenario description.
 
-User's new scenario description:
-{user_description}
+Here is the user's new scenario description: {user_description}
 
-Retrieved Scenic code to update:
+We have a Scenic code needed to be updated:
 {retrieved_code}
 
 Instructions:
-2. Replace the description line in the code with the user's scenario description
+1. Replace the description line in the code with the user's scenario description
+2. Adjust variable values in the code to match the scenario description requirements, including but not limited to distances, speeds, the red light condition, and any other relevant parameters
 3. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and formatting
-4. Output the updated code in a ```scenic code block
-
 
 Now output the updated code:

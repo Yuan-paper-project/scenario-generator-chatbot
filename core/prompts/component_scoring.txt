@@ -22,6 +22,6 @@ Output (JSON only, no markdown):
 {{
   "score": <0-100>,
   "is_satisfied": <true if score >= 70, false otherwise>,
-  "differences": "<if is_satisfied is false, list specific differences between user requirements and retrieved component; otherwise empty string>"
+  "differences": "<Provide a concise summary of the key differences between the user requirements and the retrieved component. If they match well (score >= 70), leave this empty.>"
 }}
 
