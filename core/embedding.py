@@ -43,7 +43,8 @@ class EmbeddingModel:
                     raise ValueError("No GOOGLE_API_KEY found in settings")
                 return GoogleGenerativeAIEmbeddings(
                     model=self.model_name,
-                    google_api_key=settings.GOOGLE_API_KEY
+                    google_api_key=settings.GOOGLE_API_KEY,
+                    task_type="RETRIEVAL_DOCUMENT"
                 )
             
             elif self.provider == "huggingface":
@@ -52,7 +53,6 @@ class EmbeddingModel:
                     model_kwargs={"device": self.device},
                     encode_kwargs={"normalize_embeddings": True}
                 )
-            
             else:
                 raise ValueError(f"Unsupported embedding provider: {self.provider}")
                 
@@ -60,9 +60,6 @@ class EmbeddingModel:
             raise RuntimeError(f"Failed to initialize {self.provider} embedding model: {str(e)}")
 
     def close(self):
-        """
-        Clean up resources used by the embedding model
-        """
         if hasattr(self.embedding, 'client'):
             if hasattr(self.embedding.client, 'close'):
                 self.embedding.client.close()

@@ -17,6 +17,7 @@ dependencies = [
     "langchain-openai>=0.3.33",
     "langchain-unstructured>=0.1.6",
     "langgraph>=0.6.7",
+    "markdown>=3.10",
     "mistralai>=1.9.10",
     "pydf>=12",
     "sentence-transformers>=5.1.1",

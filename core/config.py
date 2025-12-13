@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     print("using device: " ,DEVICE)
 
     #  Chunking
-    MAX_CHUNKS: int = 5  
-    CHUNK_SIZE: int = 3000
-    CHUNK_OVERLAP: int = 500
+    MAX_CHUNKS: int = 10 
+    CHUNK_SIZE: int = 2000
+    CHUNK_OVERLAP: int = 400
+
+    RANKER_TYPE: str = "rrf"
+    RANKER_PARAMS: dict = {"k": 60}  
 
     #  Ollama
     OLLAMA_URL: str = "http://10.147.17.157:11434"
