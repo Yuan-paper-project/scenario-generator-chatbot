@@ -7,7 +7,7 @@ class ErrorCorrector(BaseAgent):
     
     def __init__(self):
         prompt = load_prompt("error_corrector")
-        super().__init__(prompt, model_name = "gemini-2.5-flash", model_provider="google_genai", use_rag=True)
+        super().__init__(prompt, model_name = "gemini-2.5-flash", model_provider="google_genai")
     
     def process(self, dsl_code: str, error_message: str) -> str:
         response = self.invoke(context={

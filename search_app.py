@@ -8,6 +8,7 @@ import concurrent.futures
 from core.search_workflow import SearchWorkflow
 from core.config import get_settings
 from utilities.QueueHandler import QueueHandler
+from utilities.carla_utils import get_carla_blueprints, get_carla_maps
 
 
 log_queue = QueueHandler()
@@ -47,23 +48,23 @@ class SearchChatbotApp:
         
         if not message or not message.strip():
             logging.warning("Received empty query.")
-            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+            yield "", history, log_queue.get_logs()
             return
 
         history.append((message, "⏳ **Processing...**"))
         logging.info(f"📥 Received user message: {message}")
         
-        yield "", history, log_queue.get_logs(), gr.update(visible=True, value="Processing...")
+        yield "", history, log_queue.get_logs()
         
         try:
             if self.workflow_completed:
                 logging.info("Status: Previous workflow completed. Resetting...")
                 self.initialize_workflow()
-                yield "", history, log_queue.get_logs(), gr.update(visible=True) # Keep loading visible
+                yield "", history, log_queue.get_logs() # Keep loading visible
             
             if not self.workflow:
                 self.initialize_workflow()
-                yield "", history, log_queue.get_logs(), gr.update(visible=True) # Keep loading visible
+                yield "", history, log_queue.get_logs() # Keep loading visible
             
             result = None
             run_func = None
@@ -86,13 +87,13 @@ class SearchChatbotApp:
                     run_func = self.workflow.run
                     kwargs = {"user_feedback": message}
 
-            yield "", history, log_queue.get_logs(), gr.update(visible=True)
+            yield "", history, log_queue.get_logs()
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_func, **kwargs)
                 
                 while not future.done():
-                    yield "", history, log_queue.get_logs(), gr.update(visible=True)
+                    yield "", history, log_queue.get_logs()
                     time.sleep(0.1)
                 
                 result = future.result()
@@ -114,7 +115,7 @@ class SearchChatbotApp:
             
             history[-1] = (message, response_content)
             
-            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+            yield "", history, log_queue.get_logs()
             
         except Exception as e:
             error_msg = f"An error occurred: {str(e)}"
@@ -123,7 +124,7 @@ class SearchChatbotApp:
             self.awaiting_confirmation = False
             
             history[-1] = (message, f"Error: {error_msg}")
-            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+            yield "", history, log_queue.get_logs()
 
     def close(self):
         logging.info("🧹 Shutting down application...")
@@ -147,12 +148,23 @@ class SearchChatbotApp:
 def create_demo():
     app = SearchChatbotApp()
     
-    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft()) as demo:
+    # Fetch data
+    blueprints = get_carla_blueprints()
+    maps = get_carla_maps()
+    print(f"Loaded {len(blueprints)} blueprints and {len(maps)} maps.")
+    
+    custom_css = """
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+    body {
+        font-family: 'Roboto', sans-serif !important;
+    }
+    """
+    
+    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft(), css=custom_css) as demo:
         gr.Markdown("## 🚗 Scenic Scenario Search & Retrieval")
         gr.Markdown("Search database, confirm structure, and adapt code.")
         
         with gr.Row():
-            # -- Left Column: Chat --
             with gr.Column(scale=2):
                 chatbot = gr.Chatbot(height=600, label="Conversation")
                 msg = gr.Textbox(
@@ -160,14 +172,29 @@ def create_demo():
                     placeholder="Ego vehicle yields to another vehicle...",
                     lines=1 
                 )
+                
+                with gr.Row():
+                    blueprint_selector = gr.Dropdown(
+                        choices=blueprints, 
+                        label="Select Blueprint",
+                        value=blueprints[0] if blueprints else None,
+                        scale=2,
+                        interactive=True
+                    )
+                    map_selector = gr.Dropdown(
+                        choices=maps, 
+                        label="Select Map",
+                        value=maps[0] if maps else None,
+                        scale=2,
+                        interactive=True
+                    )
+
                 with gr.Row():
                     submit_btn = gr.Button("Submit", variant="primary")
 
             with gr.Column(scale=1):
                 with gr.Row():
                     gr.Markdown("### 🛠️ Live System Logs")
-                    clear_btn = gr.Button("Clear", scale=0)
-                
                 log_output = gr.Textbox(
                     label="Backend Execution Logs",
                     lines=30, 
@@ -177,7 +204,7 @@ def create_demo():
         msg.submit(
             app.respond_generator, 
             inputs=[msg, chatbot], 
-            outputs=[msg, chatbot, log_output ]
+            outputs=[msg, chatbot, log_output]
         )
         
         submit_btn.click(
@@ -185,13 +212,6 @@ def create_demo():
             inputs=[msg, chatbot], 
             outputs=[msg, chatbot, log_output]
         )
-        
-        def clear_ui():
-            app.initialize_workflow() 
-            log_queue.clear()         
-            return [], "", "", gr.update(visible=False, value="") 
-            
-        clear_btn.click(clear_ui, outputs=[chatbot, log_output, msg])
         
         gr.Examples(
             examples=[
