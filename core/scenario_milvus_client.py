@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class ScenarioMilvusClient:
-    
     def __init__(self, collection_name: str = "scenario_components"):
         self.collection_name = collection_name
         
@@ -86,10 +85,6 @@ class ScenarioMilvusClient:
     def get_all_components_by_scenario_id(self, scenario_id: str) -> dict:
         component_types = [
             "Scenario",
-            "Ego Vehicle",
-            "Adversarial Object",
-            "Ego Behavior",
-            "Adversarial Behavior",
             "Spatial Relation",
             "Requirement and restrictions"
         ]
@@ -100,10 +95,48 @@ class ScenarioMilvusClient:
             try:
                 component = self.query_component_by_scenario_and_type(scenario_id, component_type)
                 if component:
-                    component["source_scenario_id"] = scenario_id
+                    component["scenario_id"] = scenario_id
                     components[component_type] = component
             except Exception as e:
                 logger.warning(f"Failed to retrieve {component_type} for scenario {scenario_id}: {e}")
+        
+        try:
+            expr = f'scenario_id == "{scenario_id}" and component_type == "Ego"'
+            results = self.collection.query(
+                expr=expr,
+                output_fields=["scenario_id", "component_type", "description", "code"],
+                limit=100
+            )
+            
+            if results:
+                components["Egos"] = []
+                for entity in results:
+                    components["Egos"].append({
+                        "description": entity.get("description", ""),
+                        "code": entity.get("code", ""),
+                        "scenario_id": scenario_id
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to retrieve Egos for scenario {scenario_id}: {e}")
+        
+        try:
+            expr = f'scenario_id == "{scenario_id}" and component_type == "Adversarial"'
+            results = self.collection.query(
+                expr=expr,
+                output_fields=["scenario_id", "component_type", "description", "code"],
+                limit=100
+            )
+            
+            if results:
+                components["Adversarials"] = []
+                for entity in results:
+                    components["Adversarials"].append({
+                        "description": entity.get("description", ""),
+                        "code": entity.get("code", ""),
+                        "scenario_id": scenario_id
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to retrieve Adversarials for scenario {scenario_id}: {e}")
         
         return components
     

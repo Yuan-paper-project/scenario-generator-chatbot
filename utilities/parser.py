@@ -3,7 +3,6 @@ from scenic.syntax.parser import parse_string
 
 
 def parse_scenic(scenic_code: str):
-    """Parse Scenic code from a string and return the parse tree."""
     return parse_string(scenic_code, 'exec')
 
 
@@ -37,7 +36,7 @@ def parse_json_from_text(text: str) -> dict:
         except (json.JSONDecodeError, ValueError) as e:
             print(f"[DEBUG] Failed to extract JSON from code block: {e}")
     
-    # Fallback: Try to find JSON object anywhere in the text
+  
     try:
         start = text.find('{')
         end = text.rfind('}') + 1

@@ -30,13 +30,40 @@ class Code2LogicalAgent(BaseAgent):
         Update the interpretation based on the user feedback. Output ONLY a valid JSON object with the following structure (NO markdown code blocks, NO additional text):
 
         {{
-        "Scenario": "<one concise sentence describing the whole scenario>",
-        "Ego Vehicle": "<vehicle type restricted to car, pedestrian>",
-        "Adversarial Object": "<type of dynamic/obstacle entity interacting with ego, restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.>",
-        "Ego Behavior": "<Describe the behavior of the Ego in terms of high-level actions and direction (e.g., traveling forward, decelerates, crosses, stops, turns)>",
-        "Adversarial Behavior": "<Describe the behavior of the adversarial object in terms of high-level actions and direction (e.g., traveling forward, decelerates, crosses, stops, turns)>",
-        "Spatial Relation": "<Describe the spatial relation of the spatial component, the spawn position and the road type (straight road, highway, intersection)>",
-        "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for example, how the scenario should be terminated, what is the initial distance between the ego and the adversarial object, etc.>"
+        "Scenario": "<ONE short sentence describing the main event>",
+        "Egos": [
+            "<ONE short sentence describing the first ego vehicle including its type (restricted to car, pedestrian) and behavior>",
+            "<ONE short sentence describing the second ego vehicle including its type (restricted to car, pedestrian) and behavior if there are multiple egos>"
+        ],
+        "Adversarials": [
+            "<ONE short sentence describing the first adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
+            "<ONE short sentence describing the second adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
+            "<ONE short sentence describing the third adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>"
+        ],
+        "Spatial Relation": "<ONE short sentence describing the spatial relation of all spatial components with clear subject,  the road type (straight road, highway, intersection), how all entities are positioned relative to each other and the road>",
+        "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for example, how the scenario should be terminated, 
+        what is the initial distance between the ego and the adversarial object, etc.>" 
+        }}
+                
+        Follow the rules:
+        - Do not contain spatial relation in egos and adversarials components
+        - Start descriptions with the subject (e.g.,  "The ego vehicle", "Debris objects"), for example, "The ego vehicle travel forward, then make a right turn"
+        - For Egos, create a separate entry for each distinct ego object in the scenario (usually 1, but could be multiple)
+        - For Adversarials, create a separate entry for each distinct adversarial object in the scenario
+        - Combine object type and behavior in a single description
+
+
+        Example 1 (single ego, single adversarial):
+        {{
+        "Scenario": "Ego vehicle goes straight and an adversary vehicle makes a right turn at 3-way intersection.",
+        "Egos": [
+            "A car travels forward and decelerates if it gets too close to other objects"
+        ],
+        "Adversarials": [
+            "A car travels forward, then makes a right turn"
+        ],
+        "Spatial Relation": "The ego and adversarial vehicles are positioned on incoming lanes at a 3-way intersection.",
+        "Requirement and restrictions": "The initial distance of the ego vehicle to the intersection and the adversarial vehicle to the intersection are restricted. The scenario terminates when the ego vehicle has traveled a certain distance from its spawn point."
         }}
 
         Apply the user feedback to update the relevant fields. Output ONLY the JSON object:"""
