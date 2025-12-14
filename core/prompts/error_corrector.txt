@@ -1,4 +1,4 @@
-The following Scenic DSL code you generated has errors:
+The following Scenic DSL code  has errors:
 
 Generated Code:
 ```
@@ -8,7 +8,7 @@ Generated Code:
 Error Message:
 {error_message}
 
-Please fix the errors and regenerate valid Scenic DSL code. 
+Please fix the errors and regenerate valid Scenic DSL code. Make sure the corrected code adheres to Scenic syntax and semantics.
 Output only the corrected Scenic program in one fenced code block. No prose or explanations.
 
 

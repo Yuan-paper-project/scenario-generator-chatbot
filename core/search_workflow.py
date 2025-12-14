@@ -2,7 +2,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, StateGraph
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AIMessage
-from typing import Literal, TypedDict, Annotated, Optional
+from typing import Literal, TypedDict, Annotated
 import logging
 
 from .agents.code2logical_agent import Code2LogicalAgent
@@ -11,6 +11,7 @@ from .agents.component_scoring_agent import ComponentScoringAgent
 from .agents.component_assembler_agent import ComponentAssemblerAgent
 from .agents.component_generator_agent import ComponentGeneratorAgent
 from .agents.CodeValidator import CodeValidator
+from .agents.ErrorCorrector import ErrorCorrector
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
@@ -34,6 +35,8 @@ class SearchWorkflowState(TypedDict):
     original_components: dict
     component_replacements: dict
     processed_components: set
+    validation_error: str
+    retry_count: int
 
 
 class SearchWorkflow:
@@ -43,8 +46,9 @@ class SearchWorkflow:
         self.code_adapter = CodeAdapterAgent()
         self.scoring_agent = ComponentScoringAgent()
         self.assembler_agent = ComponentAssemblerAgent()
-        self.generator_agent = ComponentGeneratorAgent() 
+        self.generator_agent = ComponentGeneratorAgent()
         self.code_validator = CodeValidator()
+        self.error_corrector = ErrorCorrector()
         self.generation_threshold = 50
         
         try:
@@ -63,6 +67,7 @@ class SearchWorkflow:
         self.workflow.add_node("assemble_code", self._assemble_code_node)
         self.workflow.add_node("adapt_code", self._adapt_code_node)
         self.workflow.add_node("validate_code", self._validate_code_node)
+        self.workflow.add_node("correct_error", self._correct_error_node)
         
         self.workflow.add_conditional_edges(
             START,
@@ -113,7 +118,17 @@ class SearchWorkflow:
         )
         self.workflow.add_edge("assemble_code", "adapt_code")
         self.workflow.add_edge("adapt_code", "validate_code")
-        self.workflow.add_edge("validate_code", END)
+        
+        self.workflow.add_conditional_edges(
+            "validate_code",
+            self._check_validation_status,
+            {
+                "success": END,
+                "retry": "correct_error",
+                "failed": END
+            }
+        )
+        self.workflow.add_edge("correct_error", "validate_code")
         
         self.memory = MemorySaver()
         self.app = self.workflow.compile(checkpointer=self.memory)
@@ -846,6 +861,8 @@ class SearchWorkflow:
 
     def _validate_code_node(self, state: SearchWorkflowState):
         adapted_code = state.get("adapted_code", "")
+        retry_count = state.get("retry_count", 0)
+
         if not adapted_code:
             state["workflow_status"] = "completed"
             state["messages"].append(AIMessage(content="🛑 Workflow failed: No code to validate."))
@@ -860,16 +877,46 @@ class SearchWorkflow:
                 f"💡 You can start a new query anytime by typing your next scenario description."
             )
             state["messages"].append(AIMessage(content=formatted_output))
+            state["workflow_status"] = "completed"
+            state["validation_error"] = None
         else:
-            error_message = validation_result["error"]
-            formatted_output = (
-                f"⚠️ **Workflow completed with validation errors!**\n\n"
-                f"```scenic\n{adapted_code}\n```\n\n"
-                f"**Error:**\n```{error_message}```\n"
-            )
-            state["messages"].append(AIMessage(content=formatted_output))
+            state["validation_error"] = validation_result["error"]
+            if retry_count < 3:
+                state["workflow_status"] = "correction_in_progress"
+                logging.info(f"Validation failed (attempt {retry_count + 1}/3). Retrying...")
+                state["messages"].append(AIMessage(content=f"⚠️ Validation failed. Attempting to correct... (Attempt {retry_count + 1}/3)\nError: {validation_result['error']}"))
+            else:
+                error_message = validation_result["error"]
+                formatted_output = (
+                    f"⚠️ **Workflow completed with validation errors!**\n\n"
+                    f"```scenic\n{adapted_code}\n```\n\n"
+                    f"**Error:**\n```{error_message}```\n"
+                )
+                state["messages"].append(AIMessage(content=formatted_output))
+                state["workflow_status"] = "completed"
         
-        state["workflow_status"] = "completed"
+        return state
+
+    def _check_validation_status(self, state: SearchWorkflowState) -> Literal["success", "retry", "failed"]:
+        if state.get("workflow_status") == "completed":
+             if state.get("validation_error"):
+                 return "failed"
+             return "success"
+        return "retry"
+
+    def _correct_error_node(self, state: SearchWorkflowState):
+        error = state.get("validation_error")
+        code = state.get("adapted_code")
+        
+        if not error or not code:
+            return state
+            
+        logging.info("Running error correction...")
+        new_code = self.error_corrector.process(code, error)
+        
+        state["adapted_code"] = new_code
+        state["retry_count"] = state.get("retry_count", 0) + 1
+        
         return state
     
     def run(self, user_input: str = "", user_feedback: str = ""):
@@ -892,7 +939,10 @@ class SearchWorkflow:
                 "workflow_status": "",
                 "component_scores": {},
                 "retrieved_components": {},
-                "component_replacements": {}
+                "component_replacements": {},
+                "processed_components": set(),
+                "validation_error": None,
+                "retry_count": 0
             }
         
         if user_feedback:

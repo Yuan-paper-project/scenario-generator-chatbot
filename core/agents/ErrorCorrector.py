@@ -4,14 +4,12 @@ from typing import Dict, Any
 
 
 class ErrorCorrector(BaseAgent):
-    """Agent for correcting errors in generated code."""
     
     def __init__(self):
         prompt = load_prompt("error_corrector")
-        super().__init__(prompt, use_rag=True)
+        super().__init__(prompt, model_name = "gemini-2.5-flash", model_provider="google_genai", use_rag=True)
     
     def process(self, dsl_code: str, error_message: str) -> str:
-        """Generate corrected code based on error."""
         response = self.invoke(context={
             "dsl_code": dsl_code,
             "error_message": error_message
