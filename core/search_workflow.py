@@ -8,6 +8,8 @@ from .agents.code2logical_agent import Code2LogicalAgent
 from .agents.code_adapter_agent import CodeAdapterAgent
 from .agents.component_scoring_agent import ComponentScoringAgent
 from .agents.component_assembler_agent import ComponentAssemblerAgent
+from .agents.component_generator_agent import ComponentGeneratorAgent
+from .agents.CodeValidator import CodeValidator
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
@@ -25,12 +27,11 @@ class SearchWorkflowState(TypedDict):
     selected_code: str
     adapted_code: str
     workflow_status: str
-    scenario_score: dict  # Stores overall scenario scoring result
-    component_scores: dict  # Stores scoring results for each component
-    retrieved_components: dict  # Stores all retrieved components
-    original_components: dict  # Stores original component codes before replacement
-    component_replacements: dict  # Stores component snippets to replace
-    refinement_iteration: int  # Tracks number of refinement iterations
+    scenario_score: dict
+    component_scores: dict
+    retrieved_components: dict
+    original_components: dict
+    component_replacements: dict
 
 
 class SearchWorkflow:
@@ -40,13 +41,14 @@ class SearchWorkflow:
         self.code_adapter = CodeAdapterAgent()
         self.scoring_agent = ComponentScoringAgent()
         self.assembler_agent = ComponentAssemblerAgent()
-        self.max_refinement_iterations = 2  # Maximum number of refinement iterations
+        self.generator_agent = ComponentGeneratorAgent() 
+        self.code_validator = CodeValidator()
+        self.generation_threshold = 50
         
         try:
             self.milvus_client = ScenarioMilvusClient(collection_name="scenario_components_with_subject")
-            print("[INFO] Successfully initialized ScenarioMilvusClient")
         except Exception as e:
-            print(f"[WARNING] Failed to initialize ScenarioMilvusClient: {e}")
+            print(f"[ERROR] Failed to initialize ScenarioMilvusClient: {e}")
             self.milvus_client = None
         
         self.workflow = StateGraph(state_schema=SearchWorkflowState)
@@ -58,6 +60,7 @@ class SearchWorkflow:
         self.workflow.add_node("search_snippets", self._search_snippets_node)
         self.workflow.add_node("assemble_code", self._assemble_code_node)
         self.workflow.add_node("adapt_code", self._adapt_code_node)
+        self.workflow.add_node("validate_code", self._validate_code_node)
         
         self.workflow.add_conditional_edges(
             START,
@@ -87,7 +90,6 @@ class SearchWorkflow:
             }
         )
         
-        # After searching scenario, go directly to component scoring
         self.workflow.add_edge("search_scenario", "score_components")
         
         self.workflow.add_conditional_edges(
@@ -95,60 +97,70 @@ class SearchWorkflow:
             self._check_components_satisfied,
             {
                 "all_satisfied": "assemble_code",
-                "needs_refinement": "search_snippets",
-                "max_iterations": "assemble_code"
+                "needs_refinement": "search_snippets"
             }
         )
         
-        self.workflow.add_edge("search_snippets", "score_components")
+        self.workflow.add_conditional_edges(
+            "search_snippets",
+            self._after_search_or_generate,
+            {
+                "continue_refinement": "search_snippets",
+                "done": "assemble_code"
+            }
+        )
         self.workflow.add_edge("assemble_code", "adapt_code")
-        self.workflow.add_edge("adapt_code", END)
+        self.workflow.add_edge("adapt_code", "validate_code")
+        self.workflow.add_edge("validate_code", END)
         
         self.memory = MemorySaver()
         self.app = self.workflow.compile(checkpointer=self.memory)
-    
+       
     def _decide_start_point(self, state: SearchWorkflowState) -> Literal["interpret", "feedback", "search"]:
         if state.get("confirmation_status") == "rejected":
             return "feedback"
         elif state.get("logical_interpretation"):
             return "search"
-        else:
-            return "interpret"
+        return "interpret"
+    
+    def _check_confirmation(self, state: SearchWorkflowState) -> Literal["confirmed", "needs_feedback"]:
+        return "confirmed" if state.get("confirmation_status") == "confirmed" else "needs_feedback"
+    
+    def _after_feedback(self, state: SearchWorkflowState) -> Literal["search", "needs_feedback"]:
+        return "search" if state.get("confirmation_status") == "confirmed" else "needs_feedback"
+    
+    def _retrieve_components_by_scenario_id(self, scenario_id: str) -> dict:
+        if not self.milvus_client:
+            return {}
+        try:
+            return self.milvus_client.get_all_components_by_scenario_id(scenario_id)
+        except Exception as e:
+            print(f"[ERROR] Failed to retrieve components for {scenario_id}: {e}")
+            return {}
     
     def _interpret_query_node(self, state: SearchWorkflowState):
-        user_query = state["user_query"]
-        
-        logical_interpretation = self.code2logical.process(user_query)
+        logical_interpretation = self.code2logical.process(state["user_query"])
         
         formatted_response = (
-            f"**Logical Scenario Structure:**\n"
-            f"{logical_interpretation}\n\n"
+            f"**Logical Scenario Structure:**\n{logical_interpretation}\n\n"
             f"**Next steps:**\n"
             f"- To proceed, reply with 'yes' or 'ok'.\n"
             f"- If you need changes, reply with specific feedback."
         )
-        
         state["logical_interpretation"] = logical_interpretation
         state["workflow_status"] = "awaiting_confirmation"
         state["messages"].append(AIMessage(content=formatted_response))
-        
         return state
     
-    def _check_confirmation(self, state: SearchWorkflowState) -> Literal["confirmed", "needs_feedback"]:
-        if state.get("confirmation_status") == "confirmed":
-            return "confirmed"
-        return "needs_feedback"
-    
     def _handle_feedback_node(self, state: SearchWorkflowState):
-        user_feedback = state.get("user_feedback", "")
-        current_interpretation = state.get("logical_interpretation", "")
-        original_query = state.get("user_query", "")
-        
-        updated_interpretation = self.code2logical.adapt(original_query, current_interpretation, user_feedback)
+        updated_interpretation = self.code2logical.adapt(
+            state.get("user_query", ""),
+            state.get("logical_interpretation", ""),
+            state.get("user_feedback", "")
+        )
         
         formatted_response = (
-            f"**Updated Logical Scenario Structure:**\n"
-            f"{updated_interpretation}\n\n"
+            f"**Updated Logical Scenario Structure:**\n{updated_interpretation}\n\n"
             f"**Next steps:**\n"
             f"- To proceed, reply with 'yes' or 'ok'.\n"
             f"- If you need changes, reply with specific feedback."
@@ -157,181 +169,202 @@ class SearchWorkflow:
         state["logical_interpretation"] = updated_interpretation
         state["workflow_status"] = "awaiting_confirmation"
         state["messages"].append(AIMessage(content=formatted_response))
-        
         return state
     
-    def _after_feedback(self, state: SearchWorkflowState) -> Literal["search", "needs_feedback"]:
-        if state.get("confirmation_status") == "confirmed":
-            return "search"
-        return "needs_feedback"
-    
-    def _retrieve_components_by_scenario_id(self, scenario_id: str) -> dict:
-        """Retrieve all components for a given scenario_id using ScenarioMilvusClient."""
-        if not self.milvus_client:
-            return {}
-        
-        try:
-            components = self.milvus_client.get_all_components_by_scenario_id(scenario_id)
-            print(f"[INFO] Retrieved {len(components)} components for scenario {scenario_id}")
-            return components
-        except Exception as e:
-            print(f"[ERROR] Failed to retrieve components for scenario {scenario_id}: {e}")
-            return {}
-    
-    
     def _score_components_node(self, state: SearchWorkflowState):
-  
-        if not state.get("search_results") or len(state["search_results"]) == 0:
+        if not state.get("search_results"):
             return state
         
         scenario_id = state["search_results"][0].get("scenario_id")
-        if not scenario_id:
-            print("[WARNING] No scenario_id found in search results")
-            return state
         
-        if "refinement_iteration" not in state or state["refinement_iteration"] is None:
-            state["refinement_iteration"] = 0
-        
-        print(f"\n[INFO] Scoring components for scenario: {scenario_id} (Iteration: {state['refinement_iteration']})")
+        print(f"\n[INFO] Scoring components")
         
         if not state.get("retrieved_components"):
             retrieved_components = self._retrieve_components_by_scenario_id(scenario_id)
             state["retrieved_components"] = retrieved_components
             state["original_components"] = {k: v.copy() for k, v in retrieved_components.items()}
-            print(f"[DEBUG] Retrieved components from DB: {list(retrieved_components.keys())}")
         else:
             retrieved_components = state["retrieved_components"]
-            print(f"[DEBUG] Using cached retrieved components: {list(retrieved_components.keys())}")
         
         if not retrieved_components:
-            print("[WARNING] No components retrieved for scoring")
             return state
         
         logical_interpretation = state["logical_interpretation"]
-        user_criteria_dict = parse_json_from_text(logical_interpretation) # parse the logical interpretation into a dictionary of user criteria
+        user_criteria_dict = parse_json_from_text(logical_interpretation)
         
-        print(f"[INFO] Parsed {len(user_criteria_dict)} user criteria components")
-        if user_criteria_dict:
-            print(f"[DEBUG] Parsed components: {list(user_criteria_dict.keys())}")
-        else:
-            print(f"[DEBUG] Failed to parse any components from logical interpretation")
-
-        if state.get("refinement_iteration", 0) > 0:
-            if state.get("component_scores"):
-                component_scores = state["component_scores"].copy()
-                print(f"[INFO] Refinement iteration {state['refinement_iteration']} - reusing all scores from snippet search (no re-scoring)")
-                print(f"[DEBUG] Current scores: {[(k, v['score'], v['is_satisfied']) for k, v in component_scores.items()]}")
-            else:
-                component_scores = {}
-        else:
-            components_to_score = {}
-            component_scores = {}
-            
-            for component_type in user_criteria_dict.keys():
-                if component_type == "Scenario" or component_type == "Requirement and restrictions":
-                    continue
-
-                if component_type in retrieved_components:
-                    components_to_score[component_type] = {
-                        "user_criteria": user_criteria_dict[component_type],
-                        "retrieved_description": retrieved_components[component_type]["description"]
-                    }
-                else:
-                    print(f"[WARNING] Component '{component_type}' from user criteria not found in retrieved components - marking as not satisfied")
-                    component_scores[component_type] = {
-                        "score": 0,
-                        "is_satisfied": False,
-                        "differences": f"Component '{component_type}' is missing from the retrieved scenario",
-                        "user_criteria": user_criteria_dict[component_type],
-                        "retrieved_description": "NOT FOUND"
-                    }
-            
-            if components_to_score:
-                print(f"[INFO] Scoring {len(components_to_score)} components...")
-                scoring_results = self.scoring_agent.score_multiple_components(components_to_score)
-                component_scores.update(scoring_results)
+        ## remove components not in user criteria
+        components_to_remove = [
+            comp for comp in list(retrieved_components.keys())
+            if comp not in ["Scenario"] and comp not in user_criteria_dict
+        ]
         
-        if state.get("refinement_iteration", 0) == 0:
-            behavior_unsatisfied = False
-            for behavior_type in ["Ego Behavior", "Adversarial Behavior"]:
-                if behavior_type in component_scores:
-                    is_satisfied = component_scores[behavior_type].get('is_satisfied')
-                    print(f"[DEBUG] {behavior_type}: satisfied={is_satisfied}")
-                    if not is_satisfied:
-                        behavior_unsatisfied = True
-                        print(f"[INFO] {behavior_type} is unsatisfied - will also score Requirement and restrictions")
-                        break
-                else:
-                    print(f"[DEBUG] {behavior_type} not in component_scores")
-            
-            print(f"[DEBUG] behavior_unsatisfied={behavior_unsatisfied}, 'Requirement and restrictions' in user_criteria_dict={'Requirement and restrictions' in user_criteria_dict}")
-            
-            if behavior_unsatisfied and "Requirement and restrictions" in user_criteria_dict:
-                if "Requirement and restrictions" in retrieved_components:
-                    print(f"[INFO] Scoring 'Requirement and restrictions' due to unsatisfied behaviors...")
-                    req_result = self.scoring_agent.score_component(
-                        component_type="Requirement and restrictions",
-                        user_criteria=user_criteria_dict["Requirement and restrictions"],
-                        retrieved_description=retrieved_components["Requirement and restrictions"]["description"]
-                    )
-                    component_scores["Requirement and restrictions"] = req_result
-                else:
-                    print(f"[WARNING] 'Requirement and restrictions' not found in retrieved components")
-                    component_scores["Requirement and restrictions"] = {
-                        "score": 0,
-                        "is_satisfied": False,
-                        "differences": "Component 'Requirement and restrictions' is missing from the retrieved scenario",
-                        "user_criteria": user_criteria_dict["Requirement and restrictions"],
-                        "retrieved_description": "NOT FOUND"
-                    }
-            else:
-                print(f"[INFO] Behaviors satisfied - skipping 'Requirement and restrictions' scoring")
+        for component_type in components_to_remove:
+            del retrieved_components[component_type]
+            if component_type in state.get("original_components", {}):
+                del state["original_components"][component_type]
+
+        component_scores = self._score_all_components(
+            user_criteria_dict, 
+            retrieved_components
+        )
         
         if component_scores:
             state["component_scores"] = component_scores
-
-            # printthe scoring results
-            print(f"[INFO] Scoring results: {component_scores}")
-            
             satisfied_count = sum(1 for r in component_scores.values() if r['is_satisfied'])
-            unsatisfied_count = len(component_scores) - satisfied_count
-            
-            # Print summary
-            print("\n[INFO] ===== Component Scoring Summary =====")
-            print(f"[INFO] Satisfied: {satisfied_count}/{len(component_scores)}, Unsatisfied: {unsatisfied_count}")
-            for component_type, result in component_scores.items():
-                satisfied_str = "✓ SATISFIED" if result['is_satisfied'] else "✗ NOT SATISFIED"
-                print(f"[INFO] {component_type}: {result['score']}/100 - {satisfied_str}")
-                if not result['is_satisfied']:
-                    print(f"[INFO]   Differences: {result.get('differences', '')}")
-                print()
-            print("[INFO] ======================================\n")
-        else:
-            print("[WARNING] No components to score")
-            state["component_scores"] = {}
+            print(f"[INFO] Component Scoring: {satisfied_count}/{len(component_scores)} satisfied")
         
         return state
     
-    def _check_components_satisfied(self, state: SearchWorkflowState) -> Literal["all_satisfied", "needs_refinement", "max_iterations"]:
+    def _score_all_components(self, user_criteria_dict: dict, retrieved_components: dict) -> dict:
+        component_scores = {}
+        components_to_score = {}
+        
+        for component_type in user_criteria_dict.keys():
+            if component_type in ["Scenario", "Requirement and restrictions", "Egos", "Adversarials"]:
+                continue
+
+            if component_type in retrieved_components:
+                components_to_score[component_type] = {
+                    "user_criteria": user_criteria_dict[component_type],
+                    "retrieved_description": retrieved_components[component_type]["description"]
+                }
+            else:
+                component_scores[component_type] = {
+                    "score": 0,
+                    "is_satisfied": False,
+                    "differences": f"User Criteria: {user_criteria_dict[component_type]}\nRetrieved: NOT FOUND",
+                    "user_criteria": user_criteria_dict[component_type],
+                    "retrieved_description": "NOT FOUND"
+                }
+        
+        if components_to_score:
+            scoring_results = self.scoring_agent.score_multiple_components(components_to_score)
+            component_scores.update(scoring_results)
+        
+        if "Egos" in user_criteria_dict:
+            egos_list = retrieved_components.get("Egos", [])
+            component_scores["Egos"] = self._score_list_component(
+                "Ego", user_criteria_dict["Egos"], egos_list
+            )
+            retrieved_components["Egos"] = egos_list
+        
+        if "Adversarials" in user_criteria_dict:
+            advs_list = retrieved_components.get("Adversarials", [])
+            component_scores["Adversarials"] = self._score_list_component(
+                "Adversarial", user_criteria_dict["Adversarials"], advs_list
+            )
+            retrieved_components["Adversarials"] = advs_list
+        
+        components_unsatisfied = any(
+            not component_scores.get(comp, {}).get('is_satisfied')
+            for comp in ["Egos", "Adversarials"]
+            if comp in component_scores
+        )
+        
+        if components_unsatisfied and "Requirement and restrictions" in user_criteria_dict:
+            if "Requirement and restrictions" in retrieved_components:
+                req_result = self.scoring_agent.score_component(
+                    component_type="Requirement and restrictions",
+                    user_criteria=user_criteria_dict["Requirement and restrictions"],
+                    retrieved_description=retrieved_components["Requirement and restrictions"]["description"]
+                )
+                component_scores["Requirement and restrictions"] = req_result
+        
+        return component_scores
+    
+    def _score_list_component(self, component_name: str, user_list: list, retrieved_list: list) -> dict:
+        individual_scores = []
+        num_needed = len(user_list)
+        num_retrieved = len(retrieved_list)
+        
+        print(f"[INFO] Scoring {component_name}s: need {num_needed}, retrieved {num_retrieved}")
+        
+        if num_retrieved > num_needed:
+            print(f"[INFO]   Retrieved has {num_retrieved - num_needed} extra item(s), evaluating best matches...")
+            scored_candidates = []
+            for i, user_criteria in enumerate(user_list):
+                best_match_idx = None
+                best_score = {"score": 0, "is_satisfied": False}
+                
+                for j, retrieved_item in enumerate(retrieved_list):
+                    if j in [sc['retrieved_idx'] for sc in scored_candidates]:
+                        continue
+                    
+                    score = self.scoring_agent.score_component(
+                        component_type=f"{component_name}_{i}",
+                        user_criteria=user_criteria,
+                        retrieved_description=retrieved_item["description"]
+                    )
+                    
+                    if score['score'] > best_score['score']:
+                        best_match_idx = j
+                        best_score = score
+                
+                scored_candidates.append({
+                    'user_idx': i,
+                    'retrieved_idx': best_match_idx,
+                    'score': best_score
+                })
+                individual_scores.append(best_score)
+            
+            filtered_list = [retrieved_list[sc['retrieved_idx']] for sc in scored_candidates if sc['retrieved_idx'] is not None]
+            retrieved_list.clear()
+            retrieved_list.extend(filtered_list)
+            
+        elif num_retrieved < num_needed:
+            print(f"[INFO]   Missing {num_needed - num_retrieved} item(s), will need to search/generate...")
+            for i, user_criteria in enumerate(user_list):
+                if i < num_retrieved:
+                    score = self.scoring_agent.score_component(
+                        component_type=f"{component_name}_{i}",
+                        user_criteria=user_criteria,
+                        retrieved_description=retrieved_list[i]["description"]
+                    )
+                else:
+                    score = {
+                        "score": 0,
+                        "is_satisfied": False,
+                        "differences": f"User Criteria: {user_criteria}\nRetrieved: NOT FOUND",
+                        "user_criteria": user_criteria,
+                        "retrieved_description": "NOT FOUND"
+                    }
+                individual_scores.append(score)
+        else:
+            for i, user_criteria in enumerate(user_list):
+                score = self.scoring_agent.score_component(
+                    component_type=f"{component_name}_{i}",
+                    user_criteria=user_criteria,
+                    retrieved_description=retrieved_list[i]["description"]
+                )
+                individual_scores.append(score)
+        
+        avg_score = sum(s["score"] for s in individual_scores) / len(individual_scores) if individual_scores else 0
+        all_satisfied = all(s["is_satisfied"] for s in individual_scores)
+        
+        return {
+            "score": avg_score,
+            "is_satisfied": all_satisfied,
+            "differences": "; ".join([s.get("differences", "") for s in individual_scores if not s["is_satisfied"]]),
+            "individual_scores": individual_scores,
+            "user_criteria": user_list,
+            "retrieved_description": [item.get("description", "") for item in retrieved_list]
+        }
+    
+    def _check_components_satisfied(self, state: SearchWorkflowState) -> Literal["all_satisfied", "needs_refinement"]:
         component_scores = state.get("component_scores", {})
         
         if not component_scores:
             return "all_satisfied"
         
-        iteration = state.get("refinement_iteration", 0)
-        if iteration >= self.max_refinement_iterations:
-            print(f"[INFO] Max refinement iterations ({self.max_refinement_iterations}) reached")
-            return "max_iterations"
-        
         all_satisfied = all(result['is_satisfied'] for result in component_scores.values())
         
         if all_satisfied:
-            print("[INFO] All components satisfied!")
+            print("[INFO] All components satisfied")
             return "all_satisfied"
-        else:
-            unsatisfied = [comp for comp, result in component_scores.items() if not result['is_satisfied']]
-            print(f"[INFO] {len(unsatisfied)} component(s) need refinement: {unsatisfied}")
-            return "needs_refinement"
+        
+        unsatisfied = [comp for comp, result in component_scores.items() if not result['is_satisfied']]
+        print(f"[INFO] Searching better matches for {len(unsatisfied)} components: {unsatisfied}")
+        return "needs_refinement"
     
     def _search_snippets_node(self, state: SearchWorkflowState):
         component_scores = state.get("component_scores", {})
@@ -340,194 +373,359 @@ class SearchWorkflow:
         if not component_scores or not retrieved_components:
             return state
         
-        print("\n[INFO] ===== Searching for Better Snippets =====")
-        
-        unsatisfied_components = {
-            comp_type: result 
-            for comp_type, result in component_scores.items() 
+        unsatisfied_components = [
+            comp for comp, result in component_scores.items()
             if not result['is_satisfied']
-        }
+        ]
         
         if not unsatisfied_components:
             return state
         
-        for component_type, score_result in unsatisfied_components.items():
-            print(f"\n[INFO] Searching for better {component_type}...")
-            
-            user_criteria = score_result.get('user_criteria', '')
-            
-            try:
-                results = self.milvus_client.search_components_by_type(
-                    query=user_criteria,
-                    component_type=component_type,
-                    limit=5
-                )
-                
-                if results:
-                    best_candidate = None
-                    best_candidate_score = score_result
-                    current_score_value = score_result['score']
-                    excellent_threshold = 85  # Stop early if we find a score >= 85
-                    
-                    for idx, hit in enumerate(results, 1):
-                        entity = hit.entity
-                        candidate_desc = entity.get("description", "")
-                        candidate_code = entity.get("code", "")
-                        candidate_id = entity.get("scenario_id", "")
-                        
-                        candidate_score = self.scoring_agent.score_component(
-                            component_type=component_type,
-                            user_criteria=user_criteria,
-                            retrieved_description=candidate_desc
-                        )
-                        
-                        print(f"[INFO]   Candidate {idx}/5 score: {candidate_score['score']}/100, Scenario ID: {candidate_id}")
-                        
-                        if candidate_score['score'] > best_candidate_score['score']:
-                            best_candidate = {
-                                "description": candidate_desc,
-                                "code": candidate_code,
-                                "scenario_id": candidate_id
-                            }
-                            best_candidate_score = candidate_score
-                        
-                        if candidate_score['score'] >= excellent_threshold:
-                            print(f"[INFO]   🎯 Excellent match found (score: {candidate_score['score']}) - stopping search early")
-                            break
-                    
-                    if best_candidate_score['score'] > current_score_value:
-                        print(f"[INFO]   ✓ Found better match for {component_type} (score improved from {current_score_value} to {best_candidate_score['score']})")
-                        retrieved_components[component_type] = best_candidate
-                        component_scores[component_type] = best_candidate_score
-                    else:
-                        print(f"[INFO]   No better match found for {component_type} (best candidate score: {best_candidate_score['score']}, current: {current_score_value})")
-                        
-            except Exception as e:
-                print(f"[ERROR] Failed to search snippets for {component_type}: {e}")
+        component_type = unsatisfied_components[0]
+        score_result = component_scores[component_type]
         
-        # Update state
+        print(f"\n[INFO] Processing component: {component_type}")
+        
+        if component_type == "Egos":
+            self._process_list_component(
+                "Ego", "Egos", score_result, retrieved_components, component_scores
+            )
+        elif component_type == "Adversarials":
+            self._process_list_component(
+                "Adversarial", "Adversarials", score_result, retrieved_components, component_scores
+            )
+        else:
+            self._process_single_component(
+                component_type, score_result, retrieved_components, component_scores
+            )
+        
         state["retrieved_components"] = retrieved_components
         state["component_scores"] = component_scores
-        state["refinement_iteration"] = state.get("refinement_iteration", 0) + 1
-        
-        print("[INFO] ==========================================\n")
         
         return state
+    
+    def _after_search_or_generate(self, state: SearchWorkflowState) -> Literal["continue_refinement", "done"]:
+        component_scores = state.get("component_scores", {})
+        
+        if not component_scores:
+            return "done"
+        
+        unsatisfied_components = [
+            comp for comp, result in component_scores.items()
+            if not result['is_satisfied']
+        ]
+        
+        if unsatisfied_components:
+            print(f"[INFO] {len(unsatisfied_components)} components remaining: {unsatisfied_components}")
+            return "continue_refinement"
+        
+        print("[INFO] All components processed")
+        return "done"
+    
+    def _process_list_component(self, component_name: str, component_type: str, 
+                               score_result: dict, retrieved_components: dict, component_scores: dict):
+        print(f"\n[INFO] Processing {component_type}...")
+        individual_scores = score_result.get('individual_scores', [])
+        user_criteria_list = score_result.get('user_criteria', [])
+        current_list = retrieved_components.get(component_type, [])
+        
+        for i, (ind_score, user_criteria) in enumerate(zip(individual_scores, user_criteria_list)):
+            if ind_score.get('is_satisfied'):
+                continue
+            
+            print(f"[INFO]   Searching for better {component_name} {i+1}...")
+            best_candidate, best_score = self._search_component_candidates(
+                user_criteria, component_name, i
+            )
+            
+            if best_score['score'] >= self.generation_threshold and best_score['is_satisfied']:
+                print(f"[INFO]   Found satisfactory match (score: {best_score['score']})")
+                if i < len(current_list):
+                    current_list[i] = best_candidate
+                else:
+                    current_list.append(best_candidate)
+                individual_scores[i] = best_score
+            elif best_score['score'] > ind_score['score']:
+                print(f"[INFO]   Found better match (score: {best_score['score']}), but not satisfactory")
+                if i < len(current_list):
+                    current_list[i] = best_candidate
+                else:
+                    current_list.append(best_candidate)
+                individual_scores[i] = best_score
+                
+                print(f"[INFO]   Generating new {component_name} {i+1}...")
+                generated = self._generate_component(
+                    component_name, user_criteria, retrieved_components
+                )
+                
+                if generated and generated['score'] > best_score['score']:
+                    print(f"[INFO]   Generated component is better (score: {generated['score']})")
+                    if i < len(current_list):
+                        current_list[i] = generated['component']
+                    else:
+                        current_list.append(generated['component'])
+                    individual_scores[i] = generated['score_result']
+            else:
+                print(f"[INFO]   No better match found, generating new {component_name} {i+1}...")
+                generated = self._generate_component(
+                    component_name, user_criteria, retrieved_components
+                )
+                
+                if generated:
+                    if i < len(current_list):
+                        current_list[i] = generated['component']
+                    else:
+                        current_list.append(generated['component'])
+                    individual_scores[i] = generated['score_result']
+        
+        retrieved_components[component_type] = current_list
+        avg_score = sum(s["score"] for s in individual_scores) / len(individual_scores) if individual_scores else 0
+        all_satisfied = all(s["is_satisfied"] for s in individual_scores)
+        
+        component_scores[component_type] = {
+            "score": avg_score,
+            "is_satisfied": all_satisfied,
+            "differences": "; ".join([s.get("differences", "") for s in individual_scores if not s["is_satisfied"]]),
+            "individual_scores": individual_scores,
+            "user_criteria": user_criteria_list,
+            "retrieved_description": [item.get("description", "") for item in current_list]
+        }
+    
+    def _process_single_component(self, component_type: str, score_result: dict,
+                                  retrieved_components: dict, component_scores: dict):
+        print(f"\n[INFO] Processing {component_type}...")
+        user_criteria = score_result.get('user_criteria', '')
+        current_score = score_result['score']
+        
+        try:
+            print(f"[INFO]   Searching for better {component_type}...")
+            results = self.milvus_client.search_components_by_type(
+                query=user_criteria, component_type=component_type, limit=5
+            )
+            
+            if results:
+                best_candidate, best_score = self._evaluate_candidates(
+                    results, component_type, user_criteria
+                )
+                
+                if best_score['score'] >= self.generation_threshold and best_score['is_satisfied']:
+                    print(f"[INFO]   Found satisfactory match (score: {best_score['score']})")
+                    retrieved_components[component_type] = best_candidate
+                    component_scores[component_type] = best_score
+                    return
+                elif best_score['score'] > current_score:
+                    print(f"[INFO]   Found better match (score: {best_score['score']}), but not satisfactory")
+                    retrieved_components[component_type] = best_candidate
+                    component_scores[component_type] = best_score
+            
+            print(f"[INFO]   Generating new {component_type}...")
+            generated = self._generate_component(
+                component_type, user_criteria, retrieved_components
+            )
+            
+            if generated:
+                current_best_score = component_scores.get(component_type, {}).get('score', 0)
+                if generated['score'] > current_best_score:
+                    print(f"[INFO]   Generated component is better (score: {generated['score']})")
+                    retrieved_components[component_type] = generated['component']
+                    component_scores[component_type] = generated['score_result']
+        except Exception as e:
+            print(f"[ERROR] Failed to process {component_type}: {e}")
+    
+    def _search_component_candidates(self, user_criteria: str, component_type: str, index: int = None):
+        component_name = f"{component_type}_{index}" if index is not None else component_type
+        
+        try:
+            results = self.milvus_client.search_components_by_type(
+                query=user_criteria, component_type=component_type.capitalize(), limit=5
+            )
+            
+            if not results:
+                return None, {"score": 0, "is_satisfied": False}
+            
+            best_candidate = None
+            best_score = {"score": 0, "is_satisfied": False}
+            
+            for idx, hit in enumerate(results, 1):
+                entity = hit.entity
+                candidate_score = self.scoring_agent.score_component(
+                    component_type=component_name,
+                    user_criteria=user_criteria,
+                    retrieved_description=entity.get("description", "")
+                )
+                
+                if candidate_score['score'] > best_score['score']:
+                    best_candidate = {
+                        "description": entity.get("description", ""),
+                        "code": entity.get("code", ""),
+                        "scenario_id": entity.get("scenario_id", "")
+                    }
+                    best_score = candidate_score
+                
+                if candidate_score['score'] >= 85:
+                    break
+            
+            return best_candidate, best_score
+        except Exception as e:
+            print(f"[ERROR] Search failed: {e}")
+            return None, {"score": 0, "is_satisfied": False}
+    
+    def _evaluate_candidates(self, results: list, component_type: str, user_criteria: str):
+        best_candidate = None
+        best_score = {"score": 0, "is_satisfied": False}
+        
+        for idx, hit in enumerate(results, 1):
+            entity = hit.entity
+            candidate_score = self.scoring_agent.score_component(
+                component_type=component_type,
+                user_criteria=user_criteria,
+                retrieved_description=entity.get("description", "")
+            )
+            
+            if candidate_score['score'] > best_score['score']:
+                best_candidate = {
+                    "description": entity.get("description", ""),
+                    "code": entity.get("code", ""),
+                    "scenario_id": entity.get("scenario_id", "")
+                }
+                best_score = candidate_score
+            
+            if candidate_score['score'] >= 85:
+                break
+        
+        return best_candidate, best_score
+    
+    def _generate_component(self, component_type: str, user_criteria: str, retrieved_components: dict):
+        scenario_component = retrieved_components.get("Scenario", {})
+        assembled_code = scenario_component.get("code", "")
+        
+        generated_component = self.generator_agent.generate_component(
+            component_type=component_type,
+            user_criteria=user_criteria,
+            assembled_code=assembled_code
+        )
+        
+        if not generated_component.get("code"):
+            return None
+        
+        generated_score = self.scoring_agent.score_component(
+            component_type=component_type,
+            user_criteria=user_criteria,
+            retrieved_description=generated_component["description"]
+        )
+        
+        print(f"[INFO]   Generated component score: {generated_score['score']}")
+        
+        return {
+            "component": generated_component,
+            "score": generated_score['score'],
+            "score_result": generated_score
+        }
     
     def _assemble_code_node(self, state: SearchWorkflowState):
         retrieved_components = state.get("retrieved_components", {})
         original_components = state.get("original_components", {})
         
         if not retrieved_components:
-            print("[WARNING] No components to assemble")
             return state
         
-        # Print summary of base scenario and component replacements
-        base_scenario_id = state.get("search_results", [{}])[0].get("scenario_id", "Unknown")
-        print("\n" + "="*70)
-        print("[INFO] 📋 SCENARIO COMPOSITION SUMMARY")
-        print("="*70)
-        print(f"[INFO] Base Scenario ID: {base_scenario_id}")
+        search_results = state.get("search_results", [])
+        if not search_results:
+            state["workflow_status"] = "completed"
+            state["messages"].append(AIMessage(content="Error: No search results found."))
+            return state
         
-        # Check which components have been replaced
-        replaced_components = []
-        for component_type, component_data in retrieved_components.items():
-            if component_type == "Scenario":
-                continue
-            if component_type == "Requirement and restrictions":
-                continue
-                
-            original_data = original_components.get(component_type, {})
-            original_code = original_data.get("code", "")
-            current_code = component_data.get("code", "")
-            current_scenario_id = component_data.get("scenario_id", "")
-            
-            if current_code and (not original_code or original_code != current_code):
-                if current_scenario_id and current_scenario_id != base_scenario_id:
-                    replaced_components.append({
-                        "type": component_type,
-                        "from_scenario": current_scenario_id
-                    })
+        base_scenario_id = search_results[0].get("scenario_id", "Unknown")
+        logical_interpretation = state.get("logical_interpretation", "")
+        user_criteria_dict = parse_json_from_text(logical_interpretation)
         
-        if replaced_components:
-            print(f"[INFO] Replaced Components: {len(replaced_components)}")
-            for comp in replaced_components:
-                print(f"[INFO]   - {comp['type']}: from Scenario {comp['from_scenario']}")
-        else:
-            print("[INFO] No components were replaced (using all original components)")
-        print("="*70 + "\n")
-        
-        print("\n[INFO] Assembling final code from components...")
+        print(f"\n[INFO] Assembling scenario from base: {base_scenario_id}")
         
         scenario_component = retrieved_components.get("Scenario", {})
         base_code = scenario_component.get("code", "")
         
         if not base_code:
-            print("[WARNING] No base scenario code found")
             return state
         
         component_scores = state.get("component_scores", {})
-        replacements = {}
-        
-        for component_type, score_result in component_scores.items():
-            if component_type == "Scenario":
-                continue  # Skip scenario itself
-            
-            if component_type == "Requirement and restrictions":
-                continue  # Skip description component
-            
-            original_component_data = original_components.get(component_type, {})
-            original_component_code = original_component_data.get("code", "")
-            
-            current_component_data = retrieved_components.get(component_type, {})
-            current_component_code = current_component_data.get("code", "")
-            
-
-            should_assemble = False
-            
-            if not original_component_code and current_component_code:
-                should_assemble = True
-                print(f"[DEBUG] {component_type} was missing, now found - will assemble")
-            
-            elif original_component_code and current_component_code and original_component_code != current_component_code:
-                should_assemble = True
-                print(f"[DEBUG] {component_type} code changed - will assemble")
-            
-            elif not score_result.get('is_satisfied') and current_component_code:
-                should_assemble = True
-                print(f"[DEBUG] {component_type} is unsatisfied but has replacement - will assemble")
-            
-            if should_assemble:
-                source_scenario_id = current_component_data.get("scenario_id", "")
-                source_context = ""
-                
-                if source_scenario_id and source_scenario_id != state.get("search_results", [{}])[0].get("scenario_id", ""):
-                    print(f"[DEBUG] Fetching source context from scenario {source_scenario_id} for {component_type}")
-                    source_components = self._retrieve_components_by_scenario_id(source_scenario_id)
-                    if source_components:
-                        # Get the full scenario code as context
-                        source_context = source_components.get("Scenario", {}).get("code", "")
-                
-                replacements[component_type] = {
-                    "original_code": original_component_code,
-                    "replacement_code": current_component_code,
-                    "source_context": source_context
-                }
-                print(f"[DEBUG] Will replace {component_type}: original={'EXISTS' if original_component_code else 'MISSING'}, replacement={'EXISTS' if current_component_code else 'MISSING'}, source_context={'EXISTS' if source_context else 'NOT_NEEDED'}")
+        replacements = self._build_replacements(
+            component_scores, retrieved_components, original_components
+        )
         
         if replacements:
-            print(f"[INFO] Assembling code with {len(replacements)} component replacement(s)...")
+            print(f"[INFO] Applying {len(replacements)} component replacement(s)...")
             final_code = self.assembler_agent.assemble_code(base_code, replacements)
         else:
-            print("[INFO] No replacements needed, using base scenario code")
             final_code = base_code
         
         state["selected_code"] = final_code
-        
         return state
     
+    def _build_replacements(self, component_scores: dict, retrieved_components: dict, 
+                           original_components: dict) -> dict:
+        replacements = {}
+        
+        for component_type, score_result in component_scores.items():
+            if component_type in ["Scenario", "Requirement and restrictions"]:
+                continue
+            
+            if component_type == "Egos":
+                original_egos = original_components.get("Egos", [])
+                current_egos = retrieved_components.get("Egos", [])
+                original_combined = "\n\n".join([ego.get("code", "") for ego in original_egos if ego.get("code")])
+                current_combined = "\n\n".join([ego.get("code", "") for ego in current_egos if ego.get("code")])
+                
+                if original_combined != current_combined:
+                    replacements["Egos"] = {
+                        "original_code": original_combined,
+                        "replacement_code": current_combined,
+                        "source_context": ""
+                    }
+                continue
+            
+            if component_type == "Adversarials":
+                original_adversarials = original_components.get("Adversarials", [])
+                current_adversarials = retrieved_components.get("Adversarials", [])
+                original_combined = "\n\n".join([adv.get("code", "") for adv in original_adversarials if adv.get("code")])
+                current_combined = "\n\n".join([adv.get("code", "") for adv in current_adversarials if adv.get("code")])
+                
+                if original_combined != current_combined:
+                    replacements["Adversarials"] = {
+                        "original_code": original_combined,
+                        "replacement_code": current_combined,
+                        "source_context": ""
+                    }
+                continue
+            
+            original_component = original_components.get(component_type, {})
+            current_component = retrieved_components.get(component_type, {})
+            original_code = original_component.get("code", "")
+            current_code = current_component.get("code", "")
+            
+            should_replace = (
+                (not original_code and current_code) or
+                (original_code and current_code and original_code != current_code) or
+                (not score_result.get('is_satisfied') and current_code)
+            )
+            
+            if should_replace:
+                source_scenario_id = current_component.get("scenario_id", "")
+                source_context = ""
+                
+                if source_scenario_id and source_scenario_id != "GENERATED":
+                    source_components = self._retrieve_components_by_scenario_id(source_scenario_id)
+                    if source_components:
+                        source_context = source_components.get("Scenario", {}).get("code", "")
+                
+                replacements[component_type] = {
+                    "original_code": original_code,
+                    "replacement_code": current_code,
+                    "source_context": source_context
+                }
+        
+        return replacements
+    
     def _search_scenario_node(self, state: SearchWorkflowState):
-        # Search for top 5 scenarios, score them, and select the best one (>85 preferred).
         if not self.milvus_client:
             state["workflow_status"] = "completed"
             state["messages"].append(AIMessage(content="Error: Milvus database not connected."))
@@ -536,77 +734,43 @@ class SearchWorkflow:
         logical_interpretation = parse_json_from_text(state["logical_interpretation"])
         scenario_description = logical_interpretation.get("Scenario", "")
         
-        if not scenario_description:
-            state["workflow_status"] = "completed"
-            state["messages"].append(AIMessage(content="Error: No scenario description found."))
-            return state
-        
-        print(f"\n[INFO] ===== Searching for Scenarios =====")
-        print(f"[INFO] User query: {scenario_description[:100]}...")
+        print(f"\n[INFO] Searching for scenarios...")
         
         try:
-            # Search for top 5 candidate scenarios
-            results = self.milvus_client.search_scenario(
-                query=scenario_description,
-                limit=5
-            )
+            results = self.milvus_client.search_scenario(query=scenario_description, limit=5)
             
             if not results:
                 state["workflow_status"] = "completed"
                 state["messages"].append(AIMessage(content="No matching scenario found."))
                 return state
             
-            print(f"[INFO] Found {len(results)} candidate scenarios")
-            
-            # Print all candidates and select the one with highest vector score (first result)
-            for idx, hit in enumerate(results, 1):
-                hit_entity = hit.entity
-                hit_id = hit_entity.get("scenario_id", "")
-                hit_score = float(hit.score)
-                hit_desc = hit_entity.get("description", "")
-                print(f"[INFO] Candidate {idx}: Scenario ID: {hit_id}, Vector Score: {hit_score:.4f}")
-                print(f"       Description: {hit_desc[:80]}...")
-            
-            # Use the scenario with highest vector score (first result)
             best_hit = results[0]
             entity = best_hit.entity
-            candidate_id = entity.get("scenario_id", "")
-            vector_score = float(best_hit.score)
-            code = entity.get("code", "")
-            
             search_result = {
-                "scenario_id": candidate_id,
+                "scenario_id": entity.get("scenario_id", ""),
                 "component_type": entity.get("component_type"),
                 "description": entity.get("description"),
-                "code": code,
-                "score": vector_score
+                "code": entity.get("code", ""),
+                "score": float(best_hit.score)
             }
             
-            print(f"\n[INFO] ✅ Selected Scenario: {search_result['scenario_id']}")
-            print(f"[INFO]   Vector Score: {vector_score:.4f}")
-            print(f"[INFO]   Will proceed to component-level scoring and refinement.")
+            print(f"[INFO] Selected scenario: {search_result['scenario_id']}")
             
-            state["selected_code"] = code
+            state["selected_code"] = search_result["code"]
             state["search_results"] = [search_result]
-                
         except Exception as e:
-            print(f"[ERROR] Error searching database: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[ERROR] Search failed: {e}")
             state["workflow_status"] = "completed"
             state["messages"].append(AIMessage(content=f"Error searching database: {e}"))
-        
         return state
     
     def _adapt_code_node(self, state: SearchWorkflowState):
-        # Skip if no code was found
         if not state.get("selected_code"):
             return state
         
         logical_interpretation = state["logical_interpretation"]
         selected_code = state["selected_code"]
         
-        # Extract just the scenario description from the logical interpretation
         lines = logical_interpretation.strip().split('\n')
         scenario_description = ""
         for line in lines:
@@ -615,37 +779,47 @@ class SearchWorkflow:
                 break
         
         if not scenario_description:
-            # Fallback: use the user's original query instead
             scenario_description = state.get("user_query", logical_interpretation)
         
-        print(f"\n[DEBUG] Adapting code...")
-        print(f"[DEBUG] User description: {scenario_description[:100]}...")
-        print(f"[DEBUG] Retrieved code length: {len(selected_code)} chars")
-        # print(f"[DEBUG] Retrieved code has proper newlines: {'\\n' in selected_code}")
-        print(f"[DEBUG] First 300 chars of retrieved code:")
-        print(selected_code[:300])
-        
         try:
-            # Adapt the retrieved code to match the user's description
             adapted_code = self.code_adapter.process(
                 user_description=scenario_description,
                 retrieved_code=selected_code
             )
-            
-            
             state["adapted_code"] = adapted_code
-            state["workflow_status"] = "completed"
-            # Wrap in code block for proper display in Gradio
-            formatted_output = f"```scenic\n{adapted_code}\n```\n\n✅ **Workflow completed!** The scenario code has been successfully generated.\n\n💡 You can start a new query anytime by typing your next scenario description."
-            state["messages"].append(AIMessage(content=formatted_output))
         except Exception as e:
-            print(f"[DEBUG] Adaptation failed: {e}")
-            # If adaptation fails, return the original code
+            print(f"[ERROR] Adaptation failed: {e}")
             state["adapted_code"] = selected_code
+        
+        state["workflow_status"] = "in_progress"
+        return state
+
+    def _validate_code_node(self, state: SearchWorkflowState):
+        adapted_code = state.get("adapted_code", "")
+        if not adapted_code:
             state["workflow_status"] = "completed"
-            formatted_output = f"⚠️ Warning: Code adaptation failed, returning original: {e}\n\n```scenic\n{selected_code}\n```\n\n✅ **Workflow completed!** You can start a new query anytime by typing your next scenario description."
+            state["messages"].append(AIMessage(content="🛑 Workflow failed: No code to validate."))
+            return state
+
+        validation_result = self.code_validator.process(adapted_code)
+
+        if validation_result["valid"]:
+            formatted_output = (
+                f"```scenic\n{adapted_code}\n```\n\n"
+                f"✅ **Workflow completed!** The scenario code has been successfully generated and validated.\n\n"
+                f"💡 You can start a new query anytime by typing your next scenario description."
+            )
+            state["messages"].append(AIMessage(content=formatted_output))
+        else:
+            error_message = validation_result["error"]
+            formatted_output = (
+                f"⚠️ **Workflow completed with validation errors!**\n\n"
+                f"```scenic\n{adapted_code}\n```\n\n"
+                f"**Error:**\n```{error_message}```\n"
+            )
             state["messages"].append(AIMessage(content=formatted_output))
         
+        state["workflow_status"] = "completed"
         return state
     
     def run(self, user_input: str = "", user_feedback: str = ""):
@@ -668,8 +842,7 @@ class SearchWorkflow:
                 "workflow_status": "",
                 "component_scores": {},
                 "retrieved_components": {},
-                "component_replacements": {},
-                "refinement_iteration": 0
+                "component_replacements": {}
             }
         
         if user_feedback:
@@ -698,11 +871,15 @@ class SearchWorkflow:
         return []
     
     def close(self):
-        """Clean up resources."""
         try:
             if self.milvus_client:
                 self.milvus_client.close()
-                print("[INFO] MilvusClient closed successfully")
         except Exception as e:
-            print(f"[WARNING] Error closing MilvusClient: {e}")
+            print(f"[ERROR] Error closing MilvusClient: {e}")
+        
+        try:
+            if self.generator_agent:
+                self.generator_agent.close()
+        except Exception as e:
+            print(f"[ERROR] Error closing ComponentGeneratorAgent: {e}")
 
