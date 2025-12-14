@@ -24,7 +24,8 @@ class ComponentScoringAgent(BaseAgent):
         self,
         component_type: str,
         user_criteria: str,
-        retrieved_description: str
+        retrieved_description: str,
+        scenario_id: str = None
     ) -> Dict[str, Any]:
         response = self.invoke(context={
             "component_type": component_type,
@@ -56,6 +57,11 @@ class ComponentScoringAgent(BaseAgent):
             result["user_criteria"] = user_criteria
             result["retrieved_description"] = retrieved_description
             
+            # Log the scoring result
+            if scenario_id:
+                import logging
+                logging.info(f"{component_type}, {result['score']}, {scenario_id}")
+            
             return result
             
         except json.JSONDecodeError as e:
@@ -80,7 +86,8 @@ class ComponentScoringAgent(BaseAgent):
     
     def score_multiple_components(
         self,
-        component_scores: Dict[str, Dict[str, str]]
+        component_scores: Dict[str, Dict[str, str]],
+        scenario_id: str = None
     ) -> Dict[str, Dict[str, Any]]:
         results = {}
         for component_type, criteria_desc in component_scores.items():
@@ -95,7 +102,8 @@ class ComponentScoringAgent(BaseAgent):
             result = self.score_component(
                 component_type=component_type,
                 user_criteria=user_criteria,
-                retrieved_description=retrieved_description
+                retrieved_description=retrieved_description,
+                scenario_id=scenario_id
             )
             
             results[component_type] = result

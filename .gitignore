@@ -10,3 +10,4 @@ uv.lock
 .env
 results/
 chatscene_labeled
+Scenic/examples

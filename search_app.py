@@ -1,12 +1,21 @@
 import gradio as gr
-from core.search_workflow import SearchWorkflow
-from core.config import get_settings
+import logging
+import time
 import torch
 import sys
+import traceback
+import concurrent.futures
+from core.search_workflow import SearchWorkflow
+from core.config import get_settings
+from utilities.QueueHandler import QueueHandler
+
+
+log_queue = QueueHandler()
+root_logger = logging.getLogger()
+root_logger.addHandler(log_queue)
+root_logger.setLevel(logging.INFO)
 
 settings = get_settings()
-
-
 
 class SearchChatbotApp:
     def __init__(self):
@@ -24,114 +33,192 @@ class SearchChatbotApp:
         
         try:
             self.thread_counter += 1
+            logging.info(f"🔄 Initializing new workflow thread: {self.thread_counter}")
             self.workflow = SearchWorkflow(thread_id=f"search_thread_{self.thread_counter}")
             self.awaiting_confirmation = False
             self.workflow_completed = False
         except Exception as e:
             error_msg = str(e)
+            logging.error(f"❌ Error initializing workflow: {error_msg}")
             raise RuntimeError(f"Error happened: {error_msg}")
     
-    def respond(self, message, history):
-        if not message or not message.strip():
-            return "Please provide a valid query."
+    def respond_generator(self, message, history):
+        history = history or []
         
-        print(f"📥 Received user message: {message}")
+        if not message or not message.strip():
+            logging.warning("Received empty query.")
+            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+            return
+
+        history.append((message, "⏳ **Processing...**"))
+        logging.info(f"📥 Received user message: {message}")
+        
+        yield "", history, log_queue.get_logs(), gr.update(visible=True, value="Processing...")
         
         try:
             if self.workflow_completed:
-                print("🔄 Previous workflow completed - starting new workflow for new query")
+                logging.info("Status: Previous workflow completed. Resetting...")
                 self.initialize_workflow()
+                yield "", history, log_queue.get_logs(), gr.update(visible=True) # Keep loading visible
             
             if not self.workflow:
                 self.initialize_workflow()
+                yield "", history, log_queue.get_logs(), gr.update(visible=True) # Keep loading visible
+            
+            result = None
+            run_func = None
+            kwargs = {}
             
             if not self.awaiting_confirmation:
-                result = self.workflow.run(user_input=message)
-                self.awaiting_confirmation = True
+                logging.info(f"🚀 Running initial search for: '{message}'")
+                run_func = self.workflow.run
+                kwargs = {"user_input": message}
                 
-                return result.get("messages", [])[-1].content
-            
             else:
                 message_lower = message.strip().lower()
                 
                 if message_lower in ["yes", "ok", "y", "confirm"]:
-                    result = self.workflow.run(user_feedback=message)
-                    
-                    if result.get("workflow_status") == "completed":
-                        self.awaiting_confirmation = False
-                        self.workflow_completed = True
-                        return result.get("messages", [])[-1].content
-                    else:
-                        return result.get("messages", [])[-1].content
+                    logging.info("✅ User confirmed structure. Generating code...")
+                    run_func = self.workflow.run
+                    kwargs = {"user_feedback": message}
                 else:
-                    print("📝 User provided feedback - updating interpretation...")
-                    result = self.workflow.run(user_feedback=message)
-                    
-                    if result.get("workflow_status") == "completed":
-                        self.awaiting_confirmation = False
-                        self.workflow_completed = True
-                    elif result.get("workflow_status") == "awaiting_confirmation":
-                        self.awaiting_confirmation = True
-                    
-                    return result.get("messages", [])[-1].content
-                    
+                    logging.info("📝 User provided feedback. Refining results...")
+                    run_func = self.workflow.run
+                    kwargs = {"user_feedback": message}
+
+            yield "", history, log_queue.get_logs(), gr.update(visible=True)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_func, **kwargs)
+                
+                while not future.done():
+                    yield "", history, log_queue.get_logs(), gr.update(visible=True)
+                    time.sleep(0.1)
+                
+                result = future.result()
+
+            if not self.awaiting_confirmation:
+                self.awaiting_confirmation = True
+            else:
+                if result.get("workflow_status") == "completed":
+                    self.awaiting_confirmation = False
+                    self.workflow_completed = True
+                elif result.get("workflow_status") == "awaiting_confirmation":
+                    self.awaiting_confirmation = True
+
+            # Extract Response
+            response_content = ""
+            if result:
+                response_content = result.get("messages", [])[-1].content
+                logging.info("✅ Response generated successfully")
+            
+            history[-1] = (message, response_content)
+            
+            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+            
         except Exception as e:
             error_msg = f"An error occurred: {str(e)}"
-            print(f"❌ Error: {error_msg}")
-            import traceback
+            logging.error(f"❌ Critical Error: {error_msg}")
             traceback.print_exc()
             self.awaiting_confirmation = False
-            return f"Error happened: {error_msg}"
-    
+            
+            history[-1] = (message, f"Error: {error_msg}")
+            yield "", history, log_queue.get_logs(), gr.update(visible=False, value="")
+
     def close(self):
-        print("🧹 Cleaning up resources...")
-        
+        logging.info("🧹 Shutting down application...")
         if self.workflow is not None:
             try:
                 if hasattr(self.workflow, 'close'):
                     self.workflow.close()
             except Exception as e:
-                print(f"⚠️ Error closing workflow: {e}")
+                logging.error(f"Error closing workflow: {e}")
             self.workflow = None
         
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                print("✅ CUDA cache cleared")
+                logging.info("CUDA cache cleared")
         except ImportError:
             pass
-        
-        print("✅ Cleanup completed")
+        logging.info("Cleanup done.")
 
 
-if __name__ == "__main__":
-    
+def create_demo():
     app = SearchChatbotApp()
     
-    try:
-        demo = gr.ChatInterface(
-            fn=app.respond,
-            title="Scenic Scenario Search & Retrieval",
-            description="Search and retrieve similar Scenic scenarios from the database. The system will first show you a logical scenario structure for confirmation, then search the database and adapt the retrieved code to match your description.",
-            examples=[
-                "Ego vehicle is following an adversary vehicle. Adversary suddenly stops and then resumes moving forward.",
-                "Ego vehicle performs a lane change to bypass a slow adversary vehicle before returning to its original lane.",
-                "Ego vehicle yields to another vehicle while executing a maneuver at a four-way intersection."
-            ],
+    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft()) as demo:
+        gr.Markdown("## 🚗 Scenic Scenario Search & Retrieval")
+        gr.Markdown("Search database, confirm structure, and adapt code.")
+        
+        with gr.Row():
+            # -- Left Column: Chat --
+            with gr.Column(scale=2):
+                chatbot = gr.Chatbot(height=600, label="Conversation")
+                msg = gr.Textbox(
+                    label="Input", 
+                    placeholder="Ego vehicle yields to another vehicle...",
+                    lines=1 
+                )
+                with gr.Row():
+                    submit_btn = gr.Button("Submit", variant="primary")
+
+            with gr.Column(scale=1):
+                with gr.Row():
+                    gr.Markdown("### 🛠️ Live System Logs")
+                    clear_btn = gr.Button("Clear", scale=0)
+                
+                log_output = gr.Textbox(
+                    label="Backend Execution Logs",
+                    lines=30, 
+                    interactive=False
+                )
+
+        msg.submit(
+            app.respond_generator, 
+            inputs=[msg, chatbot], 
+            outputs=[msg, chatbot, log_output ]
         )
         
+        submit_btn.click(
+            app.respond_generator, 
+            inputs=[msg, chatbot], 
+            outputs=[msg, chatbot, log_output]
+        )
+        
+        def clear_ui():
+            app.initialize_workflow() 
+            log_queue.clear()         
+            return [], "", "", gr.update(visible=False, value="") 
+            
+        clear_btn.click(clear_ui, outputs=[chatbot, log_output, msg])
+        
+        gr.Examples(
+            examples=[
+                "Ego vehicle is following an adversary vehicle. Adversary suddenly stops.",
+                "Ego vehicle performs a lane change to bypass a slow adversary.",
+                "Ego vehicle yields to another vehicle at a four-way intersection."
+            ],
+            inputs=msg
+        )
+
+    return demo, app
+
+if __name__ == "__main__":
+    demo, app = create_demo()
+    
+    try:
         print("\n🚀 Launching Gradio interface...")
+        demo.queue() 
         demo.launch(
-            server_name="0.0.0.0",  # Allow external access
-            server_port=7860,       # Default Gradio port
-            share=False             # Set to True to create a public link
+            server_name="0.0.0.0", 
+            server_port=7860, 
+            share=False
         )
     except KeyboardInterrupt:
         print("\n⚠️ Interrupted by user")
     except Exception as e:
         print(f"❌ Error launching interface: {e}")
-        import traceback
         traceback.print_exc()
     finally:
         app.close()
-

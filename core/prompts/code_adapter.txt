@@ -6,7 +6,8 @@ We have a Scenic code needed to be updated:
 
 Instructions:
 1. Replace the description line in the code with the user's scenario description
-2. Adjust variable values in the code to match the scenario description requirements, including but not limited to distances, speeds, the red light condition, and any other relevant parameters
-3. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and formatting
+2. Adjust variable values in the code to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes
+3. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
+4. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and formatting
 
 Now output the updated code:
