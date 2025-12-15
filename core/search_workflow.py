@@ -46,7 +46,7 @@ class SearchWorkflow:
         self.code_adapter = CodeAdapterAgent()
         self.scoring_agent = ComponentScoringAgent()
         self.assembler_agent = ComponentAssemblerAgent()
-        self.generator_agent = ComponentGeneratorAgent()
+        self.generator_agent = ComponentGeneratorAgent() 
         self.code_validator = CodeValidator()
         self.error_corrector = ErrorCorrector()
         self.generation_threshold = 50
@@ -75,7 +75,8 @@ class SearchWorkflow:
             {
                 "interpret": "interpret_query",
                 "feedback": "handle_feedback",
-                "search": "search_scenario"
+                "search": "search_scenario",
+                "validate": "validate_code"
             }
         )
         
@@ -117,7 +118,7 @@ class SearchWorkflow:
             }
         )
         self.workflow.add_edge("assemble_code", "adapt_code")
-        self.workflow.add_edge("adapt_code", "validate_code")
+        self.workflow.add_edge("adapt_code", END)
         
         self.workflow.add_conditional_edges(
             "validate_code",
@@ -133,7 +134,9 @@ class SearchWorkflow:
         self.memory = MemorySaver()
         self.app = self.workflow.compile(checkpointer=self.memory)
        
-    def _decide_start_point(self, state: SearchWorkflowState) -> Literal["interpret", "feedback", "search"]:
+    def _decide_start_point(self, state: SearchWorkflowState) -> Literal["interpret", "feedback", "search", "validate"]:
+        if state.get("workflow_status") == "validation_requested":
+            return "validate"
         if state.get("confirmation_status") == "rejected":
             return "feedback"
         elif state.get("logical_interpretation"):
@@ -919,7 +922,7 @@ class SearchWorkflow:
         
         return state
     
-    def run(self, user_input: str = "", user_feedback: str = ""):
+    def run(self, user_input: str = "", user_feedback: str = "", validate_only: bool = False, code_to_validate: str = ""):
         config = {"configurable": {"thread_id": self.thread_id}}
         
         current_state = self.app.get_state(config)
@@ -945,7 +948,14 @@ class SearchWorkflow:
                 "retry_count": 0
             }
         
-        if user_feedback:
+        if validate_only:
+             state["workflow_status"] = "validation_requested"
+             if code_to_validate:
+                 state["adapted_code"] = code_to_validate
+        
+             state["retry_count"] = 0
+             
+        elif user_feedback:
             user_feedback_lower = user_feedback.strip().lower()
             if user_feedback_lower in ["yes", "ok", "y", "confirm"]:
                 state["confirmation_status"] = "confirmed"

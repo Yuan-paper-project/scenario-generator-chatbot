@@ -43,28 +43,28 @@ class SearchChatbotApp:
             logging.error(f"❌ Error initializing workflow: {error_msg}")
             raise RuntimeError(f"Error happened: {error_msg}")
     
-    def respond_generator(self, message, history):
+    def respond_generator(self, message, history, current_code):
         history = history or []
         
         if not message or not message.strip():
             logging.warning("Received empty query.")
-            yield "", history, log_queue.get_logs()
+            yield "", history, log_queue.get_logs(), current_code
             return
 
         history.append((message, "⏳ **Processing...**"))
         logging.info(f"📥 Received user message: {message}")
         
-        yield "", history, log_queue.get_logs()
+        yield "", history, log_queue.get_logs(), current_code
         
         try:
             if self.workflow_completed:
                 logging.info("Status: Previous workflow completed. Resetting...")
                 self.initialize_workflow()
-                yield "", history, log_queue.get_logs() # Keep loading visible
+                yield "", history, log_queue.get_logs(), current_code
             
             if not self.workflow:
                 self.initialize_workflow()
-                yield "", history, log_queue.get_logs() # Keep loading visible
+                yield "", history, log_queue.get_logs(), current_code
             
             result = None
             run_func = None
@@ -87,13 +87,13 @@ class SearchChatbotApp:
                     run_func = self.workflow.run
                     kwargs = {"user_feedback": message}
 
-            yield "", history, log_queue.get_logs()
+            yield "", history, log_queue.get_logs(), current_code
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(run_func, **kwargs)
                 
                 while not future.done():
-                    yield "", history, log_queue.get_logs()
+                    yield "", history, log_queue.get_logs(), current_code
                     time.sleep(0.1)
                 
                 result = future.result()
@@ -109,13 +109,18 @@ class SearchChatbotApp:
 
             # Extract Response
             response_content = ""
+            new_code = current_code
+            
             if result:
                 response_content = result.get("messages", [])[-1].content
+                generated_code = result.get("adapted_code", "")
+                if generated_code:
+                    new_code = generated_code
                 logging.info("✅ Response generated successfully")
             
             history[-1] = (message, response_content)
             
-            yield "", history, log_queue.get_logs()
+            yield "", history, log_queue.get_logs(), new_code
             
         except Exception as e:
             error_msg = f"An error occurred: {str(e)}"
@@ -124,7 +129,55 @@ class SearchChatbotApp:
             self.awaiting_confirmation = False
             
             history[-1] = (message, f"Error: {error_msg}")
-            yield "", history, log_queue.get_logs()
+            yield "", history, log_queue.get_logs(), current_code
+
+    def validate_generator(self, code_content, history):
+        history = history or []
+        
+        if not code_content or not code_content.strip():
+             logging.warning("Validation requested but no code provided.")
+             yield history, log_queue.get_logs(), code_content
+             return
+
+        history.append(("(User requested validation)", "⏳ **Validating and Correcting...**"))
+        logging.info("📥 Received validation request")
+        yield history, log_queue.get_logs(), code_content
+
+        try:
+            if not self.workflow:
+                 self.initialize_workflow()
+            
+            logging.info(f"🚀 Starting manual validation on {len(code_content)} chars of code...")
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content)
+                
+                while not future.done():
+                    yield history, log_queue.get_logs(), code_content
+                    time.sleep(0.1)
+                
+                result = future.result()
+            
+            response_content = ""
+            new_code = code_content
+
+            if result:
+                response_content = result.get("messages", [])[-1].content
+                corrected_code = result.get("adapted_code", "")
+                if corrected_code:
+                    new_code = corrected_code
+                logging.info("✅ Validation completed")
+
+            history[-1] = ("(User requested validation)", response_content)
+            
+            yield history, log_queue.get_logs(), new_code
+
+        except Exception as e:
+            error_msg = f"Validation Error: {str(e)}"
+            logging.error(f"❌ {error_msg}")
+            traceback.print_exc()
+            history[-1] = ("(User requested validation)", error_msg)
+            yield history, log_queue.get_logs(), code_content
 
     def close(self):
         logging.info("🧹 Shutting down application...")
@@ -153,14 +206,8 @@ def create_demo():
     maps = get_carla_maps()
     print(f"Loaded {len(blueprints)} blueprints and {len(maps)} maps.")
     
-    custom_css = """
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-    body {
-        font-family: 'Roboto', sans-serif !important;
-    }
-    """
-    
-    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft(), css=custom_css) as demo:
+
+    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft())as demo:
         gr.Markdown("## 🚗 Scenic Scenario Search & Retrieval")
         gr.Markdown("Search database, confirm structure, and adapt code.")
         
@@ -193,24 +240,38 @@ def create_demo():
                     submit_btn = gr.Button("Submit", variant="primary")
 
             with gr.Column(scale=1):
-                with gr.Row():
-                    gr.Markdown("### 🛠️ Live System Logs")
+                gr.Markdown("### 💻 Scenario Code & Logs")
+                
+                code_display = gr.Code(
+                    label="Generated Scenic Code (Editable)",
+                    language="python",
+                    interactive=True
+                )
+                
+                validate_btn = gr.Button("🔍 Validate & Correct Code", variant="secondary")
+                
                 log_output = gr.Textbox(
                     label="Backend Execution Logs",
-                    lines=30, 
+                    lines=10, 
                     interactive=False
                 )
 
         msg.submit(
             app.respond_generator, 
-            inputs=[msg, chatbot], 
-            outputs=[msg, chatbot, log_output]
+            inputs=[msg, chatbot, code_display], 
+            outputs=[msg, chatbot, log_output, code_display]
         )
         
         submit_btn.click(
             app.respond_generator, 
-            inputs=[msg, chatbot], 
-            outputs=[msg, chatbot, log_output]
+            inputs=[msg, chatbot, code_display], 
+            outputs=[msg, chatbot, log_output, code_display]
+        )
+        
+        validate_btn.click(
+            app.validate_generator,
+            inputs=[code_display, chatbot],
+            outputs=[chatbot, log_output, code_display]
         )
         
         gr.Examples(
