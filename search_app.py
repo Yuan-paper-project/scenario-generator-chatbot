@@ -207,54 +207,71 @@ def create_demo():
     print(f"Loaded {len(blueprints)} blueprints and {len(maps)} maps.")
     
 
-    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft())as demo:
+    with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft(), css=".center-row { align-items: center !important; }")as demo:
         gr.Markdown("## 🚗 Scenic Scenario Search & Retrieval")
         gr.Markdown("Search database, confirm structure, and adapt code.")
         
         with gr.Row():
-            with gr.Column(scale=2):
-                chatbot = gr.Chatbot(height=600, label="Conversation")
-                msg = gr.Textbox(
-                    label="Input", 
-                    placeholder="Ego vehicle yields to another vehicle...",
-                    lines=1 
-                )
+            with gr.Column(scale=7):
+                chatbot = gr.Chatbot(height=600, label="Conversation", type='messages')
                 
                 with gr.Row():
-                    blueprint_selector = gr.Dropdown(
-                        choices=blueprints, 
-                        label="Select Blueprint",
-                        value=blueprints[0] if blueprints else None,
-                        scale=2,
-                        interactive=True
-                    )
-                    map_selector = gr.Dropdown(
-                        choices=maps, 
-                        label="Select Map",
-                        value=maps[0] if maps else None,
-                        scale=2,
-                        interactive=True
-                    )
+                    with gr.Column(scale=2):
+                        blueprint_selector = gr.Dropdown(
+                            choices=blueprints, 
+                            label="Select Blueprint",
+                            value=blueprints[0] if blueprints else None,
+                            interactive=True
+                        )
+                        map_selector = gr.Dropdown(
+                            choices=maps, 
+                            label="Select Map",
+                            value=maps[0] if maps else None,
+                            interactive=True
+                        )
+                        weather_selector = gr.Dropdown(
+                            choices=["Clear", "Rain", "Fog", "Night"],
+                            label="Select Weather",
+                            value="Clear",
+                            interactive=True
+                        )
 
-                with gr.Row():
-                    submit_btn = gr.Button("Submit", variant="primary")
+    
+                    with gr.Column(scale=8):
+                        with gr.Row(equal_height=False, elem_classes="center-row"):
+                            msg = gr.Textbox(
+                                show_label=False,
+                                container=False,
+                                placeholder="Ego vehicle yields to another vehicle...",
+                                lines=(2, 5),
+                                scale=8
+                            )
+                            submit_btn = gr.Button("Send", variant="primary", scale=1)
+                        
+                        with gr.Column():
+                            gr.Markdown("### Examples")
+                            example_texts = [
+                                "Ego vehicle is following an adversary vehicle. Adversary suddenly stops.",
+                                "Ego vehicle performs a lane change to bypass a slow adversary.",
+                                "Ego vehicle yields to another vehicle at a four-way intersection."
+                            ]
+                            for text in example_texts:
+                                ex_btn = gr.Button(text, size="sm", variant="secondary")
+                                ex_btn.click(fn=lambda t=text: t, inputs=[], outputs=msg)
 
-            with gr.Column(scale=1):
-                gr.Markdown("### 💻 Scenario Code & Logs")
+            with gr.Column(scale=3):
+                log_output = gr.Textbox(
+                    label="Backend Execution Logs",
+                    lines=10, 
+                    interactive=False
+                )
                 
                 code_display = gr.Code(
                     label="Generated Scenic Code (Editable)",
                     language="python",
                     interactive=True
                 )
-                
                 validate_btn = gr.Button("🔍 Validate & Correct Code", variant="secondary")
-                
-                log_output = gr.Textbox(
-                    label="Backend Execution Logs",
-                    lines=10, 
-                    interactive=False
-                )
 
         msg.submit(
             app.respond_generator, 
@@ -272,15 +289,6 @@ def create_demo():
             app.validate_generator,
             inputs=[code_display, chatbot],
             outputs=[chatbot, log_output, code_display]
-        )
-        
-        gr.Examples(
-            examples=[
-                "Ego vehicle is following an adversary vehicle. Adversary suddenly stops.",
-                "Ego vehicle performs a lane change to bypass a slow adversary.",
-                "Ego vehicle yields to another vehicle at a four-way intersection."
-            ],
-            inputs=msg
         )
 
     return demo, app
