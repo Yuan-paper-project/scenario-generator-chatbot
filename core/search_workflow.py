@@ -4,6 +4,7 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AIMessage
 from typing import Literal, TypedDict, Annotated
 import logging
+import re
 
 from .agents.code2logical_agent import Code2LogicalAgent
 from .agents.code_adapter_agent import CodeAdapterAgent
@@ -12,6 +13,7 @@ from .agents.component_assembler_agent import ComponentAssemblerAgent
 from .agents.component_generator_agent import ComponentGeneratorAgent
 from .agents.CodeValidator import CodeValidator
 from .agents.ErrorCorrector import ErrorCorrector
+from .agents.SettingsUpdateAgent import SettingsUpdateAgent
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
@@ -37,6 +39,9 @@ class SearchWorkflowState(TypedDict):
     processed_components: set
     validation_error: str
     retry_count: int
+    selected_blueprint: str
+    selected_map: str
+    selected_weather: str
 
 
 class SearchWorkflow:
@@ -49,6 +54,7 @@ class SearchWorkflow:
         self.generator_agent = ComponentGeneratorAgent() 
         self.code_validator = CodeValidator()
         self.error_corrector = ErrorCorrector()
+        self.settings_agent = SettingsUpdateAgent()
         self.generation_threshold = 50
         
         try:
@@ -66,6 +72,7 @@ class SearchWorkflow:
         self.workflow.add_node("search_snippets", self._search_snippets_node)
         self.workflow.add_node("assemble_code", self._assemble_code_node)
         self.workflow.add_node("adapt_code", self._adapt_code_node)
+        self.workflow.add_node("apply_user_selections", self._apply_user_selections_node)
         self.workflow.add_node("validate_code", self._validate_code_node)
         self.workflow.add_node("correct_error", self._correct_error_node)
         
@@ -118,7 +125,8 @@ class SearchWorkflow:
             }
         )
         self.workflow.add_edge("assemble_code", "adapt_code")
-        self.workflow.add_edge("adapt_code", END)
+        self.workflow.add_edge("adapt_code", "apply_user_selections")
+        self.workflow.add_edge("apply_user_selections", END)
         
         self.workflow.add_conditional_edges(
             "validate_code",
@@ -862,6 +870,22 @@ class SearchWorkflow:
         state["workflow_status"] = "in_progress"
         return state
 
+    def _apply_user_selections_node(self, state: SearchWorkflowState):
+        code = state.get("adapted_code", "")
+        blueprint = state.get("selected_blueprint")
+        carla_map = state.get("selected_map")
+        weather = state.get("selected_weather")
+        
+        new_code = self.settings_agent.process(
+            code=code, 
+            blueprint=blueprint, 
+            carla_map=carla_map, 
+            weather=weather
+        )
+        
+        state["adapted_code"] = new_code
+        return state
+
     def _validate_code_node(self, state: SearchWorkflowState):
         adapted_code = state.get("adapted_code", "")
         retry_count = state.get("retry_count", 0)
@@ -922,7 +946,7 @@ class SearchWorkflow:
         
         return state
     
-    def run(self, user_input: str = "", user_feedback: str = "", validate_only: bool = False, code_to_validate: str = ""):
+    def _prepare_state(self, user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather):
         config = {"configurable": {"thread_id": self.thread_id}}
         
         current_state = self.app.get_state(config)
@@ -945,9 +969,17 @@ class SearchWorkflow:
                 "component_replacements": {},
                 "processed_components": set(),
                 "validation_error": None,
-                "retry_count": 0
+                "retry_count": 0,
+                "selected_blueprint": None,
+                "selected_map": None,
+                "selected_weather": None
             }
         
+        # Update selections if provided
+        if selected_blueprint: state["selected_blueprint"] = selected_blueprint
+        if selected_map: state["selected_map"] = selected_map
+        if selected_weather: state["selected_weather"] = selected_weather
+
         if validate_only:
              state["workflow_status"] = "validation_requested"
              if code_to_validate:
@@ -967,9 +999,12 @@ class SearchWorkflow:
         elif user_input:
             state["user_query"] = user_input
             state["messages"].append(HumanMessage(content=user_input))
-        
+            
+        return state, config
+
+    def run(self, user_input: str = "", user_feedback: str = "", validate_only: bool = False, code_to_validate: str = "", selected_blueprint: str = None, selected_map: str = None, selected_weather: str = None):
+        state, config = self._prepare_state(user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather)
         result = self.app.invoke(state, config)
-        
         return result
     
     def get_conversation_history(self):

@@ -59,8 +59,8 @@ def get_carla_blueprints(host='127.0.0.1', port=2000, timeout=2.0):
         logging.info(f"Successfully retrieved {len(blueprints)} blueprints from CARLA.")
         return sorted(blueprints)
     except Exception as e:
-        logging.warning(f"Could not connect to CARLA to fetch blueprints ({e}). Using default list.")
-        return sorted(DEFAULT_BLUEPRINTS)
+        # logging.warning(f"Could not connect to CARLA to fetch blueprints ({e}). Using default list.")
+        return DEFAULT_BLUEPRINTS
 
 def get_carla_maps(root_dir=None):
     if root_dir is None:

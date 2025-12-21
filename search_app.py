@@ -43,7 +43,7 @@ class SearchChatbotApp:
             logging.error(f"❌ Error initializing workflow: {error_msg}")
             raise RuntimeError(f"Error happened: {error_msg}")
     
-    def respond_generator(self, message, history, current_code):
+    def respond_generator(self, message, history, current_code, selected_blueprint=None, selected_map=None, selected_weather=None):
         history = history or []
         
         if not message or not message.strip():
@@ -51,7 +51,8 @@ class SearchChatbotApp:
             yield "", history, log_queue.get_logs(), current_code
             return
 
-        history.append((message, "⏳ **Processing...**"))
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": "⏳ **Processing...**"})
         logging.info(f"📥 Received user message: {message}")
         
         yield "", history, log_queue.get_logs(), current_code
@@ -70,27 +71,29 @@ class SearchChatbotApp:
             run_func = None
             kwargs = {}
             
+            # Pass selections to workflow
+            kwargs["selected_blueprint"] = selected_blueprint
+            kwargs["selected_map"] = selected_map
+            kwargs["selected_weather"] = selected_weather
+            
             if not self.awaiting_confirmation:
                 logging.info(f"🚀 Running initial search for: '{message}'")
-                run_func = self.workflow.run
-                kwargs = {"user_input": message}
+                kwargs["user_input"] = message
                 
             else:
                 message_lower = message.strip().lower()
                 
                 if message_lower in ["yes", "ok", "y", "confirm"]:
                     logging.info("✅ User confirmed structure. Generating code...")
-                    run_func = self.workflow.run
-                    kwargs = {"user_feedback": message}
+                    kwargs["user_feedback"] = message
                 else:
                     logging.info("📝 User provided feedback. Refining results...")
-                    run_func = self.workflow.run
-                    kwargs = {"user_feedback": message}
+                    kwargs["user_feedback"] = message
 
             yield "", history, log_queue.get_logs(), current_code
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(run_func, **kwargs)
+                future = executor.submit(self.workflow.run, **kwargs)
                 
                 while not future.done():
                     yield "", history, log_queue.get_logs(), current_code
@@ -118,7 +121,7 @@ class SearchChatbotApp:
                     new_code = generated_code
                 logging.info("✅ Response generated successfully")
             
-            history[-1] = (message, response_content)
+            history[-1] = {"role": "assistant", "content": response_content}
             
             yield "", history, log_queue.get_logs(), new_code
             
@@ -128,7 +131,7 @@ class SearchChatbotApp:
             traceback.print_exc()
             self.awaiting_confirmation = False
             
-            history[-1] = (message, f"Error: {error_msg}")
+            history[-1] = {"role": "assistant", "content": f"Error: {error_msg}"}
             yield "", history, log_queue.get_logs(), current_code
 
     def validate_generator(self, code_content, history):
@@ -139,7 +142,8 @@ class SearchChatbotApp:
              yield history, log_queue.get_logs(), code_content
              return
 
-        history.append(("(User requested validation)", "⏳ **Validating and Correcting...**"))
+        history.append({"role": "user", "content": "(User requested validation)"})
+        history.append({"role": "assistant", "content": "⏳ **Validating and Correcting...**"})
         logging.info("📥 Received validation request")
         yield history, log_queue.get_logs(), code_content
 
@@ -168,7 +172,7 @@ class SearchChatbotApp:
                     new_code = corrected_code
                 logging.info("✅ Validation completed")
 
-            history[-1] = ("(User requested validation)", response_content)
+            history[-1] = {"role": "assistant", "content": response_content}
             
             yield history, log_queue.get_logs(), new_code
 
@@ -176,7 +180,7 @@ class SearchChatbotApp:
             error_msg = f"Validation Error: {str(e)}"
             logging.error(f"❌ {error_msg}")
             traceback.print_exc()
-            history[-1] = ("(User requested validation)", error_msg)
+            history[-1] = {"role": "assistant", "content": error_msg}
             yield history, log_queue.get_logs(), code_content
 
     def close(self):
@@ -273,16 +277,19 @@ def create_demo():
                 )
                 validate_btn = gr.Button("🔍 Validate & Correct Code", variant="secondary")
 
+        input_components = [msg, chatbot, code_display, blueprint_selector, map_selector, weather_selector]
+        output_components = [msg, chatbot, log_output, code_display]
+
         msg.submit(
             app.respond_generator, 
-            inputs=[msg, chatbot, code_display], 
-            outputs=[msg, chatbot, log_output, code_display]
+            inputs=input_components, 
+            outputs=output_components
         )
         
         submit_btn.click(
             app.respond_generator, 
-            inputs=[msg, chatbot, code_display], 
-            outputs=[msg, chatbot, log_output, code_display]
+            inputs=input_components, 
+            outputs=output_components
         )
         
         validate_btn.click(

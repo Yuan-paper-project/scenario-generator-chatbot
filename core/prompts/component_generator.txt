@@ -24,7 +24,7 @@ Instructions:
    - Satisfies the user requirements
    - Follows Scenic language syntax and conventions
    - Is compatible with the assembled code context
-   - Uses appropriate classes, behaviors, and properties from the documentation
+   - Uses only the classes, behaviors, and properties from the documentation or reference components
    - Make only minimal changes to the existing code
 
 
