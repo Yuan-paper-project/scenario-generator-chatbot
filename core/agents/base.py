@@ -27,7 +27,8 @@ class BaseAgent(ABC):
                 base_url=settings.OLLAMA_URL
             )
         else:
-            self.llm = init_chat_model(self.model_name, model_provider=self.model_provider, include_thoughts=think_mode)
+            self.llm = init_chat_model(self.model_name, model_provider=self.model_provider, include_thoughts=think_mode,
+             api_key=settings.GOOGLE_API_KEY if self.model_provider == "google_genai" else settings.OPENAI_API_KEY)
     
         self.vector_store = MilvusClient() if use_rag else None
         self.last_formatted_prompt: Optional[str] = None  # Store last formatted prompt for logging
