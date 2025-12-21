@@ -21,13 +21,13 @@ class ComponentGeneratorAgent(BaseAgent):
         
         try:
             self.scenario_client = ScenarioMilvusClient(collection_name="scenario_components_with_subject")
-            print("[INFO] ComponentGeneratorAgent: Initialized ScenarioMilvusClient")
+            print("[WARNING] ComponentGeneratorAgent: Initialized ScenarioMilvusClient")
         except Exception as e:
             print(f"[WARNING] ComponentGeneratorAgent: Failed to initialize ScenarioMilvusClient: {e}")
         
         try:
             self.doc_client = MilvusClient(collection_name="documentation", embedding_provider="google_genai", embedding_model_name="models/gemini-embedding-001")
-            print("[INFO] ComponentGeneratorAgent: Initialized documentation MilvusClient")
+            print("[WARNING] ComponentGeneratorAgent: Initialized documentation MilvusClient")
         except Exception as e:
             print(f"[WARNING] ComponentGeneratorAgent: Failed to initialize documentation client: {e}")
     
@@ -46,7 +46,6 @@ class ComponentGeneratorAgent(BaseAgent):
         assembled_code: str = ""
     ) -> Dict[str, Any]:
 
-        print(f"[INFO] Generating new {component_type} component...")
         
         reference_components = self._get_reference_components(user_criteria, component_type)
         
@@ -81,8 +80,6 @@ class ComponentGeneratorAgent(BaseAgent):
                 if field not in result:
                     raise ValueError(f"Missing required field: {field}")
             
-            print(f"[INFO] Successfully generated {component_type} component")
-            print(f"[INFO] Description: {result.get('description', '')[:100]}...")
             
             return {
                 "code": result["code"],
@@ -156,8 +153,6 @@ class ComponentGeneratorAgent(BaseAgent):
             
             search_terms = component_search_terms.get(component_type, component_type)
             
-            print(f"[INFO] Documentation search query: {search_terms}")
-            
             results = self.doc_client.search(search_terms, ranker_type="rrf", ranker_params={"k": 5})
             if not results:
                 return "# No relevant documentation found"
@@ -178,6 +173,5 @@ class ComponentGeneratorAgent(BaseAgent):
                 self.scenario_client.close()
             if self.doc_client:
                 self.doc_client.close()
-            print("[INFO] ComponentGeneratorAgent resources cleaned up")
         except Exception as e:
             print(f"[WARNING] Error closing ComponentGeneratorAgent resources: {e}")

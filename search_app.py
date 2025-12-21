@@ -9,6 +9,7 @@ from core.search_workflow import SearchWorkflow
 from core.config import get_settings
 from utilities.QueueHandler import QueueHandler
 from utilities.carla_utils import get_carla_blueprints, get_carla_maps
+settings = get_settings()
 
 
 log_queue = QueueHandler()
@@ -16,7 +17,12 @@ root_logger = logging.getLogger()
 root_logger.addHandler(log_queue)
 root_logger.setLevel(logging.INFO)
 
-settings = get_settings()
+# Suppress HTTP logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("pymilvus").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
 
 class SearchChatbotApp:
     def __init__(self):
@@ -34,7 +40,6 @@ class SearchChatbotApp:
         
         try:
             self.thread_counter += 1
-            logging.info(f"🔄 Initializing new workflow thread: {self.thread_counter}")
             self.workflow = SearchWorkflow(thread_id=f"search_thread_{self.thread_counter}")
             self.awaiting_confirmation = False
             self.workflow_completed = False
@@ -47,19 +52,16 @@ class SearchChatbotApp:
         history = history or []
         
         if not message or not message.strip():
-            logging.warning("Received empty query.")
             yield "", history, log_queue.get_logs(), current_code
             return
 
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": "⏳ **Processing...**"})
-        logging.info(f"📥 Received user message: {message}")
         
         yield "", history, log_queue.get_logs(), current_code
         
         try:
             if self.workflow_completed:
-                logging.info("Status: Previous workflow completed. Resetting...")
                 self.initialize_workflow()
                 yield "", history, log_queue.get_logs(), current_code
             
@@ -71,23 +73,22 @@ class SearchChatbotApp:
             run_func = None
             kwargs = {}
             
-            # Pass selections to workflow
             kwargs["selected_blueprint"] = selected_blueprint
             kwargs["selected_map"] = selected_map
             kwargs["selected_weather"] = selected_weather
             
             if not self.awaiting_confirmation:
-                logging.info(f"🚀 Running initial search for: '{message}'")
+                logging.info(f"📝 Waiting for user confirmation")
                 kwargs["user_input"] = message
                 
             else:
                 message_lower = message.strip().lower()
                 
                 if message_lower in ["yes", "ok", "y", "confirm"]:
-                    logging.info("✅ User confirmed structure. Generating code...")
+                    logging.info("✅ User confirmed structure. ")
                     kwargs["user_feedback"] = message
                 else:
-                    logging.info("📝 User provided feedback. Refining results...")
+                    logging.info("📝 Receieve user provided feedback")
                     kwargs["user_feedback"] = message
 
             yield "", history, log_queue.get_logs(), current_code
@@ -119,7 +120,6 @@ class SearchChatbotApp:
                 generated_code = result.get("adapted_code", "")
                 if generated_code:
                     new_code = generated_code
-                logging.info("✅ Response generated successfully")
             
             history[-1] = {"role": "assistant", "content": response_content}
             
@@ -134,7 +134,7 @@ class SearchChatbotApp:
             history[-1] = {"role": "assistant", "content": f"Error: {error_msg}"}
             yield "", history, log_queue.get_logs(), current_code
 
-    def validate_generator(self, code_content, history):
+    def validate_only_generator(self, code_content, history):
         history = history or []
         
         if not code_content or not code_content.strip():
@@ -143,18 +143,17 @@ class SearchChatbotApp:
              return
 
         history.append({"role": "user", "content": "(User requested validation)"})
-        history.append({"role": "assistant", "content": "⏳ **Validating and Correcting...**"})
-        logging.info("📥 Received validation request")
+        history.append({"role": "assistant", "content": "⏳ **Validating...**"})
         yield history, log_queue.get_logs(), code_content
 
         try:
             if not self.workflow:
                  self.initialize_workflow()
             
-            logging.info(f"🚀 Starting manual validation on {len(code_content)} chars of code...")
+            logging.info(f"🚀Validation started")
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content)
+                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content, auto_correction=False)
                 
                 while not future.done():
                     yield history, log_queue.get_logs(), code_content
@@ -183,8 +182,54 @@ class SearchChatbotApp:
             history[-1] = {"role": "assistant", "content": error_msg}
             yield history, log_queue.get_logs(), code_content
 
+    def auto_correct_generator(self, code_content, history):
+        history = history or []
+        
+        if not code_content or not code_content.strip():
+             logging.warning("Auto-correction requested but no code provided.")
+             yield history, log_queue.get_logs(), code_content
+             return
+
+        history.append({"role": "user", "content": "(User requested auto-correction)"})
+        history.append({"role": "assistant", "content": "⏳ **Validating and Correcting...**"})
+        yield history, log_queue.get_logs(), code_content
+
+        try:
+            if not self.workflow:
+                 self.initialize_workflow()
+            
+            logging.info(f"🚀 Auto-correction started")
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content, auto_correction=True)
+                
+                while not future.done():
+                    yield history, log_queue.get_logs(), code_content
+                    time.sleep(0.1)
+                
+                result = future.result()
+            
+            response_content = ""
+            new_code = code_content
+            if result:
+                response_content = result.get("messages", [])[-1].content
+                corrected_code = result.get("adapted_code", "")
+                if corrected_code:
+                    new_code = corrected_code
+                logging.info("✅ Auto-correction completed")
+            history[-1] = {"role": "assistant", "content": response_content}
+            
+            yield history, log_queue.get_logs(), new_code
+
+        except Exception as e:
+            error_msg = f"Auto-correction Error: {str(e)}"
+            logging.error(f"❌ {error_msg}")
+            traceback.print_exc()
+            history[-1] = {"role": "assistant", "content": error_msg}
+            yield history, log_queue.get_logs(), code_content
+
     def close(self):
-        logging.info("🧹 Shutting down application...")
+        logging.info("🧹 Close the application")
         if self.workflow is not None:
             try:
                 if hasattr(self.workflow, 'close'):
@@ -196,16 +241,13 @@ class SearchChatbotApp:
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                logging.info("CUDA cache cleared")
         except ImportError:
             pass
         logging.info("Cleanup done.")
 
-
 def create_demo():
     app = SearchChatbotApp()
     
-    # Fetch data
     blueprints = get_carla_blueprints()
     maps = get_carla_maps()
     print(f"Loaded {len(blueprints)} blueprints and {len(maps)} maps.")
@@ -234,9 +276,9 @@ def create_demo():
                             interactive=True
                         )
                         weather_selector = gr.Dropdown(
-                            choices=["Clear", "Rain", "Fog", "Night"],
+                            choices=['ClearNoon', 'CloudyNoon', 'WetNoon', 'WetCloudyNoon', 'SoftRainNoon', 'MidRainyNoon', 'HardRainNoon', 'ClearSunset', 'CloudySunset', 'WetSunset', 'WetCloudySunset', 'SoftRainSunset', 'MidRainSunset', 'HardRainSunset'],
                             label="Select Weather",
-                            value="Clear",
+                            value="ClearNoon",
                             interactive=True
                         )
 
@@ -275,7 +317,9 @@ def create_demo():
                     language="python",
                     interactive=True
                 )
-                validate_btn = gr.Button("🔍 Validate & Correct Code", variant="secondary")
+                with gr.Row():
+                    validate_btn = gr.Button("🔍 Validate Code", variant="secondary")
+                    correct_btn = gr.Button("🔧 Auto-Correct", variant="primary")
 
         input_components = [msg, chatbot, code_display, blueprint_selector, map_selector, weather_selector]
         output_components = [msg, chatbot, log_output, code_display]
@@ -293,7 +337,13 @@ def create_demo():
         )
         
         validate_btn.click(
-            app.validate_generator,
+            app.validate_only_generator,
+            inputs=[code_display, chatbot],
+            outputs=[chatbot, log_output, code_display]
+        )
+        
+        correct_btn.click(
+            app.auto_correct_generator,
             inputs=[code_display, chatbot],
             outputs=[chatbot, log_output, code_display]
         )

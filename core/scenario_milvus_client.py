@@ -16,19 +16,16 @@ class ScenarioMilvusClient:
         try:
             self.embedding_model = EmbeddingModel()
             self.embedding = self.embedding_model.embedding
-            logger.info(f"Initialized embedding model: {self.embedding_model.provider}")
         except Exception as e:
-            logger.error(f"Failed to initialize embedding model: {e}")
             raise
         
         try:
             connections.connect(uri=settings.MILVUS_URI, token=settings.MILVUS_TOKEN)
             self.collection = Collection(collection_name)
             self.collection.load()
-            logger.info(f"Successfully connected to collection: {collection_name}")
-            logger.info(f"Collection has {self.collection.num_entities} entities")
+            logger.info(f"✅ Successfully connected to collection: {collection_name}")
         except Exception as e:
-            logger.error(f"Failed to connect to collection {collection_name}: {e}")
+            logger.error(f"❌ Failed to connect to collection {collection_name}: {e}")
             raise
     
     def search_components_by_type(self, query: str, component_type: str, limit: int = 5) -> list:
@@ -54,7 +51,7 @@ class ScenarioMilvusClient:
             return []
             
         except Exception as e:
-            logger.error(f"Error in search_components_by_type: {e}")
+            logger.error(f" ❌ Error in search_components_by_type: {e}")
             raise
     
     def query_component_by_scenario_and_type(self, scenario_id: str, component_type: str) -> dict:

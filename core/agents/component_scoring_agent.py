@@ -57,11 +57,6 @@ class ComponentScoringAgent(BaseAgent):
             result["user_criteria"] = user_criteria
             result["retrieved_description"] = retrieved_description
             
-            # Log the scoring result
-            if scenario_id:
-                import logging
-                logging.info(f"{component_type}, {result['score']}, {scenario_id}")
-            
             return result
             
         except json.JSONDecodeError as e:
@@ -98,7 +93,6 @@ class ComponentScoringAgent(BaseAgent):
                 print(f"[WARNING] Skipping {component_type}: missing criteria or description")
                 continue
             
-            print(f"[INFO] Scoring component: {component_type}")
             result = self.score_component(
                 component_type=component_type,
                 user_criteria=user_criteria,
@@ -109,7 +103,6 @@ class ComponentScoringAgent(BaseAgent):
             results[component_type] = result
             
             satisfied_str = "✓ satisfied" if result['is_satisfied'] else "✗ not satisfied"
-            print(f"[INFO] {component_type} score: {result['score']}/100 ({satisfied_str})")
         
         return results
 

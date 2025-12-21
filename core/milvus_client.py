@@ -15,10 +15,8 @@ class MilvusClient:
     def __init__(self, collection_name: str = settings.MILVUS_COLLECTION, embedding_provider: str = settings.EMBEDDING_PROVIDER, embedding_model_name: str = settings.EMBEDDING_MODEL ):
         try:
             self.embedding_model = EmbeddingModel(provider=embedding_provider, model_name=embedding_model_name)
-            logger.info(f"Using {self.embedding_model.provider} embeddings")
             self.embedding = self.embedding_model.embedding
         except Exception as e:
-            logger.error(f"Failed to initialize embedding model: {e}")
             raise
 
         self.vector_store = Milvus(

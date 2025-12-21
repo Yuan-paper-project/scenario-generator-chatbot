@@ -41,7 +41,6 @@ class CodeValidator():
         current_code = code
         is_valid, error = self.validate_scenic_code(current_code)
         if is_valid:
-            logging.info("Validation Successful.")
             self.last_response = f"Validation Result: Valid\nCode:\n{current_code}"
             return {
                 "valid": True,
@@ -49,7 +48,6 @@ class CodeValidator():
                 "code": current_code
             }
         else:
-            logging.error(f"Error: {error}")
             return {
                 "valid": False,
                 "error": error,

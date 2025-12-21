@@ -42,6 +42,7 @@ class SearchWorkflowState(TypedDict):
     selected_blueprint: str
     selected_map: str
     selected_weather: str
+    auto_correction: bool
 
 
 class SearchWorkflow:
@@ -60,7 +61,6 @@ class SearchWorkflow:
         try:
             self.milvus_client = ScenarioMilvusClient(collection_name="scenario_components_with_subject")
         except Exception as e:
-            logging.error(f"[ERROR] Failed to initialize ScenarioMilvusClient: {e}")
             self.milvus_client = None
         
         self.workflow = StateGraph(state_schema=SearchWorkflowState)
@@ -163,7 +163,7 @@ class SearchWorkflow:
         try:
             return self.milvus_client.get_all_components_by_scenario_id(scenario_id)
         except Exception as e:
-            logging.error(f"[ERROR] Failed to retrieve components for {scenario_id}: {e}")
+            logging.error(f"❌ Failed to retrieve components for {scenario_id}: {e}")
             return {}
     
     def _interpret_query_node(self, state: SearchWorkflowState):
@@ -205,7 +205,7 @@ class SearchWorkflow:
         
         scenario_id = state["search_results"][0].get("scenario_id")
         
-        logging.info(f"Scoring components for scenario ID: {scenario_id}")
+        logging.info(f"📝 Scoring components for scenario ID: {scenario_id}")
         
         if not state.get("retrieved_components"):
             retrieved_components = self._retrieve_components_by_scenario_id(scenario_id)
@@ -240,7 +240,7 @@ class SearchWorkflow:
         if component_scores:
             state["component_scores"] = component_scores
             satisfied_count = sum(1 for r in component_scores.values() if r['is_satisfied'])
-            logging.info(f"Component Scoring: {satisfied_count}/{len(component_scores)} satisfied")
+            logging.info(f"📝 Component Scoring: {satisfied_count}/{len(component_scores)} satisfied")
         
         return state
     
@@ -265,7 +265,7 @@ class SearchWorkflow:
                     "user_criteria": user_criteria_dict[component_type],
                     "retrieved_description": "NOT FOUND"
                 }
-                logging.info(f"{component_type}, 0, {scenario_id}")
+                logging.info(f"📝Component Type: {component_type}, Score: 0, Scenario Id: {scenario_id}")
         
         if components_to_score:
             scoring_results = self.scoring_agent.score_multiple_components(components_to_score, scenario_id)
@@ -308,10 +308,8 @@ class SearchWorkflow:
         num_needed = len(user_list)
         num_retrieved = len(retrieved_list)
         
-        logging.info(f"Scoring {component_name}s: need {num_needed}, retrieved {num_retrieved}")
         
         if num_retrieved > num_needed:
-            logging.info(f"  Retrieved has {num_retrieved - num_needed} extra item(s), evaluating best matches...")
             scored_candidates = []
             for i, user_criteria in enumerate(user_list):
                 best_match_idx = None
@@ -344,7 +342,7 @@ class SearchWorkflow:
             retrieved_list.extend(filtered_list)
             
         elif num_retrieved < num_needed:
-            logging.info(f"  Missing {num_needed - num_retrieved} item(s), will need to search/generate...")
+     
             for i, user_criteria in enumerate(user_list):
                 if i < num_retrieved:
                     score = self.scoring_agent.score_component(
@@ -361,7 +359,7 @@ class SearchWorkflow:
                         "user_criteria": user_criteria,
                         "retrieved_description": "NOT FOUND"
                     }
-                    logging.info(f"{component_name}_{i}, 0, {scenario_id}")
+                    logging.info(f"📝Component Type: {component_name}_{i}, Score: 0, Scenario Id: {scenario_id}")
                 individual_scores.append(score)
         else:
             for i, user_criteria in enumerate(user_list):
@@ -394,11 +392,11 @@ class SearchWorkflow:
         all_satisfied = all(result['is_satisfied'] for result in component_scores.values())
         
         if all_satisfied:
-            logging.info("All components satisfied")
+            logging.info("✅ All components satisfied")
             return "all_satisfied"
         
         unsatisfied = [comp for comp, result in component_scores.items() if not result['is_satisfied']]
-        logging.info(f"Searching better matches for {len(unsatisfied)} components: {unsatisfied}")
+        logging.info(f"🔍 Searching better matches for {len(unsatisfied)} components: {unsatisfied}")
         return "needs_refinement"
     
     def _search_snippets_node(self, state: SearchWorkflowState):
@@ -420,7 +418,7 @@ class SearchWorkflow:
         component_type = unsatisfied_components[0]
         score_result = component_scores[component_type]
         
-        logging.info(f"Processing component: {component_type}")
+        logging.info(f" 🛠️ Processing component: {component_type}")
         
         if component_type == "Egos":
             self._process_list_component(
@@ -453,16 +451,13 @@ class SearchWorkflow:
             if not result['is_satisfied']
         ]
         
-        # Check if there are any unsatisfied components that HAVEN'T been processed yet
         remaining_work = False
         
         for comp in unsatisfied_components:
             if comp in ["Egos", "Adversarials"]:
-                # For lists, check if ALL items in the list have been processed
                 score_result = component_scores[comp]
                 individual_scores = score_result.get('individual_scores', [])
                 
-                # Check if any individual item is unsatisfied AND hasn't been processed
                 for i, ind_score in enumerate(individual_scores):
                     item_key = f"{comp}_{i}"
                     if not ind_score.get('is_satisfied') and item_key not in processed_components:
@@ -478,15 +473,14 @@ class SearchWorkflow:
                 break
 
         if remaining_work:
-            logging.info(f"{len(unsatisfied_components)} components unsatisfied. Continuing refinement...")
+            logging.info(f"🔄 There are still {len(unsatisfied_components)} components unsatisfied. Continuing refinement.")
             return "continue_refinement"
         
-        logging.info("All components processed (or satisfied)")
+        logging.info("✅ All components processed (or satisfied)")
         return "done"
     
     def _process_list_component(self, component_name: str, component_type: str, 
                                score_result: dict, retrieved_components: dict, component_scores: dict, processed_components: set):
-        logging.info(f"Processing {component_type}...")
         individual_scores = score_result.get('individual_scores', [])
         user_criteria_list = score_result.get('user_criteria', [])
         current_list = retrieved_components.get(component_type, [])
@@ -494,47 +488,45 @@ class SearchWorkflow:
         for i, (ind_score, user_criteria) in enumerate(zip(individual_scores, user_criteria_list)):
             item_key = f"{component_type}_{i}"
             
-            # Skip if satisfied OR already processed
             if ind_score.get('is_satisfied') or item_key in processed_components:
                 continue
             
-            # Mark as processed immediately
             processed_components.add(item_key)
             
-            logging.info(f"  Searching for better {component_name} {i+1}...")
+            logging.info(f" 🔍 Searching for better {component_name} {i+1}...")
             best_candidate, best_score = self._search_component_candidates(
                 user_criteria, component_name, i
             )
             
             if best_score['score'] >= self.generation_threshold and best_score['is_satisfied']:
-                logging.info(f"  Found satisfactory match (score: {best_score['score']})")
+                logging.info(f"✅ Found satisfactory match (score: {best_score['score']})")
                 if i < len(current_list):
                     current_list[i] = best_candidate
                 else:
                     current_list.append(best_candidate)
                 individual_scores[i] = best_score
             elif best_score['score'] > ind_score['score']:
-                logging.info(f"  Found better match (score: {best_score['score']}), but not satisfactory")
+                logging.info(f"🔍 Found better match (score: {best_score['score']}), but not satisfactory")
                 if i < len(current_list):
                     current_list[i] = best_candidate
                 else:
                     current_list.append(best_candidate)
                 individual_scores[i] = best_score
                 
-                logging.info(f"  Generating new {component_name} {i+1}...")
+                logging.info(f"🛠️ Start generating new {component_name} {i+1}")
                 generated = self._generate_component(
                     component_name, user_criteria, retrieved_components
                 )
                 
                 if generated and generated['score'] > best_score['score']:
-                    logging.info(f"  Generated component is better (score: {generated['score']})")
+                    logging.info(f"✅ Generated component is better (score: {generated['score']})")
                     if i < len(current_list):
                         current_list[i] = generated['component']
                     else:
                         current_list.append(generated['component'])
                     individual_scores[i] = generated['score_result']
             else:
-                logging.info(f"  No better match found, generating new {component_name} {i+1}...")
+                logging.info(f"🔍 No better component match found, start generating new {component_name} {i+1}")
                 generated = self._generate_component(
                     component_name, user_criteria, retrieved_components
                 )
@@ -562,19 +554,17 @@ class SearchWorkflow:
     def _process_single_component(self, component_type: str, score_result: dict,
                                   retrieved_components: dict, component_scores: dict, processed_components: set):
         
-        # Skip if already processed
         if component_type in processed_components:
             return
 
-        # Mark as processed immediately
         processed_components.add(component_type)
         
-        logging.info(f"Processing {component_type}...")
+        logging.info(f"🛠️ Processing {component_type}")
         user_criteria = score_result.get('user_criteria', '')
         current_score = score_result['score']
         
         try:
-            logging.info(f"  Searching for better {component_type}...")
+            logging.info(f"🔍 Searching for better {component_type}")
             results = self.milvus_client.search_components_by_type(
                 query=user_criteria, component_type=component_type, limit=5
             )
@@ -585,16 +575,16 @@ class SearchWorkflow:
                 )
                 
                 if best_score['score'] >= self.generation_threshold and best_score['is_satisfied']:
-                    logging.info(f"  Found satisfactory match (score: {best_score['score']})")
+                    logging.info(f"✅ Found satisfactory match (score: {best_score['score']})")
                     retrieved_components[component_type] = best_candidate
                     component_scores[component_type] = best_score
                     return
                 elif best_score['score'] > current_score:
-                    logging.info(f"  Found better match (score: {best_score['score']}), but not satisfactory")
+                    logging.info(f"🔍 Found better match (score: {best_score['score']}), but not satisfactory")
                     retrieved_components[component_type] = best_candidate
                     component_scores[component_type] = best_score
             
-            logging.info(f"  Generating new {component_type}...")
+            logging.info(f"🛠️ Generating new {component_type}")
             generated = self._generate_component(
                 component_type, user_criteria, retrieved_components
             )
@@ -602,11 +592,11 @@ class SearchWorkflow:
             if generated:
                 current_best_score = component_scores.get(component_type, {}).get('score', 0)
                 if generated['score'] > current_best_score:
-                    logging.info(f"  Generated component is better (score: {generated['score']})")
+                    logging.info(f"✅ Generated component is better (score: {generated['score']})")
                     retrieved_components[component_type] = generated['component']
                     component_scores[component_type] = generated['score_result']
         except Exception as e:
-            logging.error(f"[ERROR] Failed to process {component_type}: {e}")
+            logging.error(f"❌ Failed to process {component_type}: {e}")
     
     def _search_component_candidates(self, user_criteria: str, component_type: str, index: int = None):
         component_name = f"{component_type}_{index}" if index is not None else component_type
@@ -643,7 +633,7 @@ class SearchWorkflow:
             
             return best_candidate, best_score
         except Exception as e:
-            logging.error(f"[ERROR] Search failed: {e}")
+            logging.error(f"❌ Search failed: {e}")
             return None, {"score": 0, "is_satisfied": False}
     
     def _evaluate_candidates(self, results: list, component_type: str, user_criteria: str):
@@ -690,7 +680,7 @@ class SearchWorkflow:
             retrieved_description=generated_component["description"]
         )
         
-        logging.info(f"  Generated component score: {generated_score['score']}")
+        logging.info(f"✅ Generated component score: {generated_score['score']}")
         
         return {
             "component": generated_component,
@@ -715,7 +705,7 @@ class SearchWorkflow:
         logical_interpretation = state.get("logical_interpretation", "")
         user_criteria_dict = parse_json_from_text(logical_interpretation)
         
-        logging.info(f"Assembling scenario from base: {base_scenario_id}")
+        logging.info(f"🧩 Assembling scenario from base: {base_scenario_id}")
         
         scenario_component = retrieved_components.get("Scenario", {})
         base_code = scenario_component.get("code", "")
@@ -729,7 +719,7 @@ class SearchWorkflow:
         )
         
         if replacements:
-            logging.info(f"Applying {len(replacements)} component replacement(s)...")
+            logging.info(f"🔄 Applying {len(replacements)} component replacement")
             final_code = self.assembler_agent.assemble_code(base_code, replacements)
         else:
             final_code = base_code
@@ -810,7 +800,7 @@ class SearchWorkflow:
         logical_interpretation = parse_json_from_text(state["logical_interpretation"])
         scenario_description = logical_interpretation.get("Scenario", "")
         
-        logging.info(f"Searching for scenarios...")
+        logging.info(f"🔍 Searching for scenarios")
         
         try:
             results = self.milvus_client.search_scenario(query=scenario_description, limit=5)
@@ -830,12 +820,12 @@ class SearchWorkflow:
                 "score": float(best_hit.score)
             }
             
-            logging.info(f"Selected scenario: {search_result['scenario_id']}")
+            logging.info(f"✅ Selected scenario: {search_result['scenario_id']}")
             
             state["selected_code"] = search_result["code"]
             state["search_results"] = [search_result]
         except Exception as e:
-            logging.error(f"[ERROR] Search failed: {e}")
+            logging.error(f"❌ Search failed: {e}")
             state["workflow_status"] = "completed"
             state["messages"].append(AIMessage(content=f"Error searching database: {e}"))
         return state
@@ -864,7 +854,7 @@ class SearchWorkflow:
             )
             state["adapted_code"] = adapted_code
         except Exception as e:
-            logging.error(f"[ERROR] Adaptation failed: {e}")
+            logging.error(f"❌ Adaptation failed: {e}")
             state["adapted_code"] = selected_code
         
         state["workflow_status"] = "in_progress"
@@ -883,12 +873,14 @@ class SearchWorkflow:
             weather=weather
         )
         
+        logging.info(f"⚙️ Apply user settings model: blueprint: {blueprint}, map: {carla_map}, weather: {weather}")
         state["adapted_code"] = new_code
         return state
 
     def _validate_code_node(self, state: SearchWorkflowState):
         adapted_code = state.get("adapted_code", "")
         retry_count = state.get("retry_count", 0)
+        auto_correction = state.get("auto_correction", True)
 
         if not adapted_code:
             state["workflow_status"] = "completed"
@@ -908,9 +900,9 @@ class SearchWorkflow:
             state["validation_error"] = None
         else:
             state["validation_error"] = validation_result["error"]
-            if retry_count < 3:
+            if auto_correction and retry_count < 3:
                 state["workflow_status"] = "correction_in_progress"
-                logging.info(f"Validation failed (attempt {retry_count + 1}/3). Retrying...")
+                logging.info(f"⚠️ Validation failed (attempt {retry_count + 1}/3). Retrying...")
                 state["messages"].append(AIMessage(content=f"⚠️ Validation failed. Attempting to correct... (Attempt {retry_count + 1}/3)\nError: {validation_result['error']}"))
             else:
                 error_message = validation_result["error"]
@@ -938,7 +930,7 @@ class SearchWorkflow:
         if not error or not code:
             return state
             
-        logging.info("Running error correction...")
+        logging.info("⚙️ Starting error correction")
         new_code = self.error_corrector.process(code, error)
         
         state["adapted_code"] = new_code
@@ -946,7 +938,7 @@ class SearchWorkflow:
         
         return state
     
-    def _prepare_state(self, user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather):
+    def _prepare_state(self, user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather, auto_correction):
         config = {"configurable": {"thread_id": self.thread_id}}
         
         current_state = self.app.get_state(config)
@@ -975,10 +967,11 @@ class SearchWorkflow:
                 "selected_weather": None
             }
         
-        # Update selections if provided
         if selected_blueprint: state["selected_blueprint"] = selected_blueprint
         if selected_map: state["selected_map"] = selected_map
         if selected_weather: state["selected_weather"] = selected_weather
+        
+        state["auto_correction"] = auto_correction
 
         if validate_only:
              state["workflow_status"] = "validation_requested"
@@ -1002,8 +995,8 @@ class SearchWorkflow:
             
         return state, config
 
-    def run(self, user_input: str = "", user_feedback: str = "", validate_only: bool = False, code_to_validate: str = "", selected_blueprint: str = None, selected_map: str = None, selected_weather: str = None):
-        state, config = self._prepare_state(user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather)
+    def run(self, user_input: str = "", user_feedback: str = "", validate_only: bool = False, code_to_validate: str = "", selected_blueprint: str = None, selected_map: str = None, selected_weather: str = None, auto_correction: bool = True):
+        state, config = self._prepare_state(user_input, user_feedback, validate_only, code_to_validate, selected_blueprint, selected_map, selected_weather, auto_correction)
         result = self.app.invoke(state, config)
         return result
     
@@ -1020,10 +1013,10 @@ class SearchWorkflow:
             if self.milvus_client:
                 self.milvus_client.close()
         except Exception as e:
-            logging.error(f"[ERROR] Error closing MilvusClient: {e}")
+            logging.error(f"❌ Error closing MilvusClient: {e}")
         
         try:
             if self.generator_agent:
                 self.generator_agent.close()
         except Exception as e:
-            logging.error(f"[ERROR] Error closing ComponentGeneratorAgent: {e}")
+            logging.error(f"❌ Error closing ComponentGeneratorAgent: {e}")
