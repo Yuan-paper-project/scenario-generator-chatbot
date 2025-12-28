@@ -9,6 +9,7 @@ import re
 from core.config import get_settings
 from core.prompts import load_prompt
 from core.milvus_client import MilvusClient
+from utilities.AgentLogger import get_agent_logger
 
 settings = get_settings()
 
@@ -17,6 +18,7 @@ class BaseAgent(ABC):
     
     def __init__(self, prompt_template: str, model_name: str = None, model_provider: str = None, use_rag: bool = False, think_mode: bool = False):
         self.prompt_template = ChatPromptTemplate.from_template(prompt_template)
+        self.prompt_template_str = prompt_template  # Store original template string for logging
         self.model_name = model_name or settings.LLM_MODEL_NAME
         self.model_provider = model_provider or settings.LLM_PROVIDER
         
@@ -33,6 +35,7 @@ class BaseAgent(ABC):
         self.vector_store = MilvusClient() if use_rag else None
         self.last_formatted_prompt: Optional[str] = None  # Store last formatted prompt for logging
         self.last_response: Optional[str] = None  # Store last response for logging
+        self.last_context: Optional[Dict] = None  # Store last context for logging
 
     @abstractmethod
     def process(self, **kwargs) -> Any:
@@ -47,6 +50,7 @@ class BaseAgent(ABC):
             formatted_prompt += f"\n\nRelevant Context:\n{retrieved_context}"
         
         self.last_formatted_prompt = formatted_prompt
+        self.last_context = context
         
         response = self.llm.invoke([HumanMessage(content=formatted_prompt)])
         response_content = response.content
@@ -65,6 +69,28 @@ class BaseAgent(ABC):
             response_content = " ".join(text_parts)
         
         self.last_response = response_content
+        
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            metadata = {
+                "model_name": self.model_name,
+                "model_provider": self.model_provider,
+                "use_rag": self.vector_store is not None,
+                "retrieved_context_length": len(retrieved_context) if retrieved_context else 0
+            }
+            
+            if hasattr(self, '_current_component_type'):
+                metadata["component_type"] = self._current_component_type
+            
+            agent_logger.log_agent_interaction(
+                agent_name=self.__class__.__name__,
+                system_prompt=self.prompt_template_str,
+                user_prompt=None,  # Not applicable for this pattern
+                full_prompt=formatted_prompt,
+                context=context,
+                response=response_content,
+                metadata=metadata
+            )
         
         return response_content
     

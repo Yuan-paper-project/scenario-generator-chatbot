@@ -21,10 +21,9 @@ Instructions:
 2. Study the reference components to understand the code structure, patterns, and syntax
 3. Refer to the Scenic documentation and search for useful information for correct syntax and available features
 4. Generate a NEW component that:
-   - Satisfies the user requirements
    - Follows Scenic language syntax and conventions
    - Is compatible with the assembled code context
-   - Uses only the classes, behaviors, and properties from the documentation or reference components
+   - Uses only the classes, behaviors, and properties from the documentation or reference components, do not create a new behavior which is not in the reference Component or documentation
    - Make only minimal changes to the existing code
 
 

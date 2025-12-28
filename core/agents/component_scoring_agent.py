@@ -27,6 +27,9 @@ class ComponentScoringAgent(BaseAgent):
         retrieved_description: str,
         scenario_id: str = None
     ) -> Dict[str, Any]:
+        # Store component_type for logging purposes
+        self._current_component_type = component_type
+        
         response = self.invoke(context={
             "component_type": component_type,
             "user_criteria": user_criteria,

@@ -9,6 +9,7 @@ from core.search_workflow import SearchWorkflow
 from core.config import get_settings
 from utilities.QueueHandler import QueueHandler
 from utilities.carla_utils import get_carla_blueprints, get_carla_maps
+from utilities.AgentLogger import initialize_agent_logger, reset_agent_logger, get_agent_logger
 settings = get_settings()
 
 
@@ -30,6 +31,8 @@ class SearchChatbotApp:
         self.thread_counter = 0
         self.awaiting_confirmation = False
         self.workflow_completed = False
+        self.agent_logger = None
+        self.generation_counter = 0
     
     def initialize_workflow(self):
         if self.workflow:
@@ -38,11 +41,14 @@ class SearchChatbotApp:
             except:
                 pass
         
+        self.thread_counter += 1
+        session_id = f"search_thread_{self.thread_counter}"
+        
         try:
-            self.thread_counter += 1
-            self.workflow = SearchWorkflow(thread_id=f"search_thread_{self.thread_counter}")
+            self.workflow = SearchWorkflow(thread_id=session_id)
             self.awaiting_confirmation = False
             self.workflow_completed = False
+            logging.info(f"🚀 Workflow initialized with thread ID: {session_id}")
         except Exception as e:
             error_msg = str(e)
             logging.error(f"❌ Error initializing workflow: {error_msg}")
@@ -68,6 +74,13 @@ class SearchChatbotApp:
             if not self.workflow:
                 self.initialize_workflow()
                 yield "", history, log_queue.get_logs(), current_code
+            
+            if not self.awaiting_confirmation:
+                reset_agent_logger()
+                self.generation_counter += 1
+                generation_id = f"generation_{self.generation_counter:03d}"
+                self.agent_logger = initialize_agent_logger(generation_id)
+                logging.info(f"📁 New generation started: {generation_id}")
             
             result = None
             run_func = None
@@ -110,6 +123,10 @@ class SearchChatbotApp:
                     self.workflow_completed = True
                 elif result.get("workflow_status") == "awaiting_confirmation":
                     self.awaiting_confirmation = True
+            
+            if result.get("workflow_status") == "completed" and self.agent_logger:
+                self.agent_logger.write_summary()
+                logging.info(f"📊 Agent logs saved to: {self.agent_logger.results_dir}")
 
             # Extract Response
             response_content = ""
@@ -150,6 +167,11 @@ class SearchChatbotApp:
             if not self.workflow:
                  self.initialize_workflow()
             
+            reset_agent_logger()
+            self.generation_counter += 1
+            generation_id = f"validation_{self.generation_counter:03d}"
+            self.agent_logger = initialize_agent_logger(generation_id)
+            
             logging.info(f"🚀Validation started")
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -170,6 +192,10 @@ class SearchChatbotApp:
                 if corrected_code:
                     new_code = corrected_code
                 logging.info("✅ Validation completed")
+                
+                if self.agent_logger:
+                    self.agent_logger.write_summary()
+                    logging.info(f"📊 Validation logs saved to: {self.agent_logger.results_dir}")
 
             history[-1] = {"role": "assistant", "content": response_content}
             
@@ -198,6 +224,11 @@ class SearchChatbotApp:
             if not self.workflow:
                  self.initialize_workflow()
             
+            reset_agent_logger()
+            self.generation_counter += 1
+            generation_id = f"autocorrect_{self.generation_counter:03d}"
+            self.agent_logger = initialize_agent_logger(generation_id)
+            
             logging.info(f"🚀 Auto-correction started")
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -217,6 +248,11 @@ class SearchChatbotApp:
                 if corrected_code:
                     new_code = corrected_code
                 logging.info("✅ Auto-correction completed")
+                
+                if self.agent_logger:
+                    self.agent_logger.write_summary()
+                    logging.info(f"📊 Auto-correction logs saved to: {self.agent_logger.results_dir}")
+            
             history[-1] = {"role": "assistant", "content": response_content}
             
             yield history, log_queue.get_logs(), new_code
@@ -230,6 +266,16 @@ class SearchChatbotApp:
 
     def close(self):
         logging.info("🧹 Close the application")
+        
+        if self.agent_logger:
+            try:
+                self.agent_logger.write_summary()
+                logging.info(f"📊 Final agent logs saved to: {self.agent_logger.results_dir}")
+            except Exception as e:
+                logging.error(f"Error writing agent logger summary: {e}")
+        
+        reset_agent_logger()
+        
         if self.workflow is not None:
             try:
                 if hasattr(self.workflow, 'close'):

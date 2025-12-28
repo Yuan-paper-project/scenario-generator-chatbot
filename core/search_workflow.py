@@ -17,6 +17,7 @@ from .agents.SettingsUpdateAgent import SettingsUpdateAgent
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
+from utilities.AgentLogger import get_agent_logger
 
 settings = get_settings()
 
@@ -167,6 +168,13 @@ class SearchWorkflow:
             return {}
     
     def _interpret_query_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "interpret_query",
+                "user_query": state.get("user_query", "")
+            })
+        
         logical_interpretation = self.code2logical.process(state["user_query"])
         
         formatted_response = (
@@ -178,9 +186,24 @@ class SearchWorkflow:
         state["logical_interpretation"] = logical_interpretation
         state["workflow_status"] = "awaiting_confirmation"
         state["messages"].append(AIMessage(content=formatted_response))
+        
+        if agent_logger:
+            agent_logger.log_workflow_event("node_exit", {
+                "node": "interpret_query",
+                "logical_interpretation": logical_interpretation,
+                "workflow_status": state["workflow_status"]
+            })
+        
         return state
     
     def _handle_feedback_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "handle_feedback",
+                "user_feedback": state.get("user_feedback", "")
+            })
+        
         updated_interpretation = self.code2logical.adapt(
             state.get("user_query", ""),
             state.get("logical_interpretation", ""),
@@ -197,9 +220,23 @@ class SearchWorkflow:
         state["logical_interpretation"] = updated_interpretation
         state["workflow_status"] = "awaiting_confirmation"
         state["messages"].append(AIMessage(content=formatted_response))
+        
+        if agent_logger:
+            agent_logger.log_workflow_event("node_exit", {
+                "node": "handle_feedback",
+                "updated_interpretation": updated_interpretation
+            })
+        
         return state
     
     def _score_components_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "score_components",
+                "scenario_id": state.get("search_results", [{}])[0].get("scenario_id", "")
+            })
+        
         if not state.get("search_results"):
             return state
         
@@ -241,6 +278,14 @@ class SearchWorkflow:
             state["component_scores"] = component_scores
             satisfied_count = sum(1 for r in component_scores.values() if r['is_satisfied'])
             logging.info(f"📝 Component Scoring: {satisfied_count}/{len(component_scores)} satisfied")
+            
+            if agent_logger:
+                agent_logger.log_workflow_event("node_exit", {
+                    "node": "score_components",
+                    "satisfied_count": satisfied_count,
+                    "total_components": len(component_scores),
+                    "component_scores_summary": {k: v['score'] for k, v in component_scores.items()}
+                })
         
         return state
     
@@ -792,6 +837,13 @@ class SearchWorkflow:
         return replacements
     
     def _search_scenario_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "search_scenario",
+                "logical_interpretation": state.get("logical_interpretation", "")
+            })
+        
         if not self.milvus_client:
             state["workflow_status"] = "completed"
             state["messages"].append(AIMessage(content="Error: Milvus database not connected."))
@@ -824,6 +876,13 @@ class SearchWorkflow:
             
             state["selected_code"] = search_result["code"]
             state["search_results"] = [search_result]
+            
+            if agent_logger:
+                agent_logger.log_workflow_event("node_exit", {
+                    "node": "search_scenario",
+                    "scenario_id": search_result['scenario_id'],
+                    "search_score": search_result['score']
+                })
         except Exception as e:
             logging.error(f"❌ Search failed: {e}")
             state["workflow_status"] = "completed"
@@ -831,6 +890,12 @@ class SearchWorkflow:
         return state
     
     def _adapt_code_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "adapt_code"
+            })
+        
         if not state.get("selected_code"):
             return state
         
@@ -853,6 +918,12 @@ class SearchWorkflow:
                 retrieved_code=selected_code
             )
             state["adapted_code"] = adapted_code
+            
+            if agent_logger:
+                agent_logger.log_workflow_event("node_exit", {
+                    "node": "adapt_code",
+                    "code_length": len(adapted_code)
+                })
         except Exception as e:
             logging.error(f"❌ Adaptation failed: {e}")
             state["adapted_code"] = selected_code
@@ -878,6 +949,13 @@ class SearchWorkflow:
         return state
 
     def _validate_code_node(self, state: SearchWorkflowState):
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "validate_code",
+                "retry_count": state.get("retry_count", 0)
+            })
+        
         adapted_code = state.get("adapted_code", "")
         retry_count = state.get("retry_count", 0)
         auto_correction = state.get("auto_correction", True)
@@ -898,6 +976,12 @@ class SearchWorkflow:
             state["messages"].append(AIMessage(content=formatted_output))
             state["workflow_status"] = "completed"
             state["validation_error"] = None
+            
+            if agent_logger:
+                agent_logger.log_workflow_event("node_exit", {
+                    "node": "validate_code",
+                    "validation_status": "valid"
+                })
         else:
             state["validation_error"] = validation_result["error"]
             if auto_correction and retry_count < 3:
@@ -913,6 +997,13 @@ class SearchWorkflow:
                 )
                 state["messages"].append(AIMessage(content=formatted_output))
                 state["workflow_status"] = "completed"
+            
+            if agent_logger:
+                agent_logger.log_workflow_event("node_exit", {
+                    "node": "validate_code",
+                    "validation_status": "invalid",
+                    "error": validation_result["error"]
+                })
         
         return state
 

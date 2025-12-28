@@ -1,6 +1,7 @@
 from langchain_core.messages import HumanMessage
 from .base import BaseAgent
 from core.prompts import load_prompt
+from utilities.AgentLogger import get_agent_logger
 
 class Code2LogicalAgent(BaseAgent):
     def __init__(self):
@@ -69,5 +70,27 @@ class Code2LogicalAgent(BaseAgent):
         Apply the user feedback to update the relevant fields. Output ONLY the JSON object:"""
                 
         response = self.llm.invoke([HumanMessage(content=prompt)])
-        return response.content.strip()
+        response_content = response.content.strip()
+        
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_agent_interaction(
+                agent_name=f"{self.__class__.__name__}.adapt",
+                system_prompt="Adaptation prompt for updating logical structure based on user feedback",
+                user_prompt=None,
+                full_prompt=prompt,
+                context={
+                    "original_query": original_query,
+                    "current_interpretation": current_interpretation,
+                    "user_feedback": user_feedback
+                },
+                response=response_content,
+                metadata={
+                    "model_name": self.model_name,
+                    "model_provider": self.model_provider,
+                    "method": "adapt"
+                }
+            )
+        
+        return response_content
 
