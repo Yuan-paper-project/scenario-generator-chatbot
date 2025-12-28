@@ -22,6 +22,30 @@ Output (JSON only, no markdown):
 {{
   "score": <0-100>,
   "is_satisfied": <true if score >= 70, false otherwise>,
-  "differences": "<Provide a concise summary of the key differences between the user requirements and the retrieved component. If they match well (score >= 70), leave this empty.>"
+  "differences": "<Provide a concise summary of the key differences between the user requirements and the retrieved component."
 }}
 
+
+Example:
+
+User Requirements:
+A car travels forward, following another vehicle.
+
+Retrieved Component:
+A car travels forward
+
+Score: 80 
+Is Satisfied: True
+Differences: Following another vehicle could be achieved by following a lane or following a trajectory in spatial relation, so it's a good enough match
+
+
+Example 2:
+User Requirements:
+A car is traveling forward, then suddenly stops.
+
+Retrieved Component:
+A car is turning right at 3-way intersection.
+
+Score: 0
+Is Satisfied: False
+Differences: The retrieved component is not a sudden stop, it's a right turn
