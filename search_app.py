@@ -315,7 +315,7 @@ def create_demo():
                         map_selector = gr.Dropdown(
                             choices=maps, 
                             label="Select Map",
-                            value=maps[0] if maps else None,
+                            value="Town05" if "Town05" in maps else (maps[0] if maps else None),
                             interactive=True
                         )
                         weather_selector = gr.Dropdown(
