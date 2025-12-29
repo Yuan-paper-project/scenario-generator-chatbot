@@ -57,7 +57,6 @@ class BaseAgent(ABC):
         
         # Handle Gemini thinking mode response (list with thinking + response parts)
         if isinstance(response_content, list):
-            # Extract only the text content from each part
             text_parts = []
             for part in response_content:
                 if hasattr(part, 'text'):
@@ -82,10 +81,13 @@ class BaseAgent(ABC):
             if hasattr(self, '_current_component_type'):
                 metadata["component_type"] = self._current_component_type
             
+            if hasattr(self, '_current_component_code') and self._current_component_code:
+                metadata["component_code"] = self._current_component_code
+            
             agent_logger.log_agent_interaction(
                 agent_name=self.__class__.__name__,
                 system_prompt=self.prompt_template_str,
-                user_prompt=None,  # Not applicable for this pattern
+                user_prompt=None,  
                 full_prompt=formatted_prompt,
                 context=context,
                 response=response_content,

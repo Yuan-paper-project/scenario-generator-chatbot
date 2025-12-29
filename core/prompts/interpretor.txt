@@ -1,0 +1,27 @@
+Your task is to analyze the Scenic code and extract high-level descriptions for each component.
+
+Analyze the ENTIRE scenario code provided and output ONLY a valid JSON object with the following structure (NO markdown code blocks, NO additional text):
+
+{{
+  "Scenario": "<ONE short sentence describing the main event of the entire scenario>",
+  "Ego": "<ONE short sentence describing the ego's type and its behavior based ONLY on the 'Ego' code block>",
+  "Adversarials": [
+      "<ONE short sentence describing the first adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior based ONLY on the 'Adversarial' code block>",
+      "<ONE short sentence describing the second adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior based ONLY on the 'Adversarial' code block>"
+  ],
+  "Spatial Relation": "<ONE short sentence describing the initial placement and road geometry based ONLY on the 'Spatial Relation' code block (e.g., where the ego is spawned relative to lanes)>",
+  "Requirement and restrictions": "<Describe the constraints, termination conditions, and environmental requirements based ONLY on the 'Requirement and restrictions' code block> "
+}}
+
+Rules:
+- STRICT LOCALITY: Only describe information explicitly present in the specific component's code block. 
+ - For "Spatial Relation": If the code only defines the ego's spawn point in a lane, do NOT mention other vehicles or complex maneuvers.
+ - Start descriptions with the subject (e.g., "The ego vehicle", "A car").
+ - Do NOT include quantitative details (distances, speeds, etc.).
+ - Do NOT make assumptions. If the 'Ego' code doesn't mention a lane change, the 'Ego' description shouldn't either, even if it happens in the full simulation.
+ - For Adversarials, create a separate entry for each distinct adversarial object in the scenario
+ - Combine object type and behavior in a single description
+ - Traffic light descriptions belong in "Requirement and restrictions", not in Ego or Adversarials
+
+Scenic Code with logical structure:
+{scenic_code}

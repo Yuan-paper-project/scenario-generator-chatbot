@@ -294,13 +294,14 @@ class SearchWorkflow:
         components_to_score = {}
         
         for component_type in user_criteria_dict.keys():
-            if component_type in ["Scenario", "Requirement and restrictions", "Egos", "Adversarials"]:
+            if component_type in ["Scenario", "Requirement and restrictions", "Adversarials"]:
                 continue
 
             if component_type in retrieved_components:
                 components_to_score[component_type] = {
                     "user_criteria": user_criteria_dict[component_type],
-                    "retrieved_description": retrieved_components[component_type]["description"]
+                    "retrieved_description": retrieved_components[component_type]["description"],
+                    "component_code": retrieved_components[component_type].get("code", "")
                 }
             else:
                 component_scores[component_type] = {
@@ -316,13 +317,6 @@ class SearchWorkflow:
             scoring_results = self.scoring_agent.score_multiple_components(components_to_score, scenario_id)
             component_scores.update(scoring_results)
         
-        if "Egos" in user_criteria_dict:
-            egos_list = retrieved_components.get("Egos", [])
-            component_scores["Egos"] = self._score_list_component(
-                "Ego", user_criteria_dict["Egos"], egos_list, scenario_id
-            )
-            retrieved_components["Egos"] = egos_list
-        
         if "Adversarials" in user_criteria_dict:
             advs_list = retrieved_components.get("Adversarials", [])
             component_scores["Adversarials"] = self._score_list_component(
@@ -332,7 +326,7 @@ class SearchWorkflow:
         
         components_unsatisfied = any(
             not component_scores.get(comp, {}).get('is_satisfied')
-            for comp in ["Egos", "Adversarials"]
+            for comp in ["Adversarials"]
             if comp in component_scores
         )
         
@@ -342,7 +336,8 @@ class SearchWorkflow:
                     component_type="Requirement and restrictions",
                     user_criteria=user_criteria_dict["Requirement and restrictions"],
                     retrieved_description=retrieved_components["Requirement and restrictions"]["description"],
-                    scenario_id=scenario_id
+                    scenario_id=scenario_id,
+                    component_code=retrieved_components["Requirement and restrictions"].get("code", "")
                 )
                 component_scores["Requirement and restrictions"] = req_result
         
@@ -368,7 +363,8 @@ class SearchWorkflow:
                         component_type=f"{component_name}_{i}",
                         user_criteria=user_criteria,
                         retrieved_description=retrieved_item["description"],
-                        scenario_id=scenario_id
+                        scenario_id=scenario_id,
+                        component_code=retrieved_item.get("code", "")
                     )
                     
                     if score['score'] > best_score['score']:
@@ -394,7 +390,8 @@ class SearchWorkflow:
                         component_type=f"{component_name}_{i}",
                         user_criteria=user_criteria,
                         retrieved_description=retrieved_list[i]["description"],
-                        scenario_id=scenario_id
+                        scenario_id=scenario_id,
+                        component_code=retrieved_list[i].get("code", "")
                     )
                 else:
                     score = {
@@ -412,7 +409,8 @@ class SearchWorkflow:
                     component_type=f"{component_name}_{i}",
                     user_criteria=user_criteria,
                     retrieved_description=retrieved_list[i]["description"],
-                    scenario_id=scenario_id
+                    scenario_id=scenario_id,
+                    component_code=retrieved_list[i].get("code", "")
                 )
                 individual_scores.append(score)
         
@@ -465,11 +463,7 @@ class SearchWorkflow:
         
         logging.info(f" 🛠️ Processing component: {component_type}")
         
-        if component_type == "Egos":
-            self._process_list_component(
-                "Ego", "Egos", score_result, retrieved_components, component_scores, processed_components
-            )
-        elif component_type == "Adversarials":
+        if component_type == "Adversarials":
             self._process_list_component(
                 "Adversarial", "Adversarials", score_result, retrieved_components, component_scores, processed_components
             )
@@ -499,7 +493,7 @@ class SearchWorkflow:
         remaining_work = False
         
         for comp in unsatisfied_components:
-            if comp in ["Egos", "Adversarials"]:
+            if comp in ["Adversarials"]:
                 score_result = component_scores[comp]
                 individual_scores = score_result.get('individual_scores', [])
                 
@@ -662,7 +656,8 @@ class SearchWorkflow:
                 candidate_score = self.scoring_agent.score_component(
                     component_type=component_name,
                     user_criteria=user_criteria,
-                    retrieved_description=entity.get("description", "")
+                    retrieved_description=entity.get("description", ""),
+                    component_code=entity.get("code", "")
                 )
                 
                 if candidate_score['score'] > best_score['score']:
@@ -690,7 +685,8 @@ class SearchWorkflow:
             candidate_score = self.scoring_agent.score_component(
                 component_type=component_type,
                 user_criteria=user_criteria,
-                retrieved_description=entity.get("description", "")
+                retrieved_description=entity.get("description", ""),
+                component_code=entity.get("code", "")
             )
             
             if candidate_score['score'] > best_score['score']:
@@ -722,7 +718,8 @@ class SearchWorkflow:
         generated_score = self.scoring_agent.score_component(
             component_type=component_type,
             user_criteria=user_criteria,
-            retrieved_description=generated_component["description"]
+            retrieved_description=generated_component["description"],
+            component_code=generated_component.get("code", "")
         )
         
         logging.info(f"✅ Generated component score: {generated_score['score']}")
@@ -778,20 +775,6 @@ class SearchWorkflow:
         
         for component_type, score_result in component_scores.items():
             if component_type in ["Scenario", "Requirement and restrictions"]:
-                continue
-            
-            if component_type == "Egos":
-                original_egos = original_components.get("Egos", [])
-                current_egos = retrieved_components.get("Egos", [])
-                original_combined = "\n\n".join([ego.get("code", "") for ego in original_egos if ego.get("code")])
-                current_combined = "\n\n".join([ego.get("code", "") for ego in current_egos if ego.get("code")])
-                
-                if original_combined != current_combined:
-                    replacements["Egos"] = {
-                        "original_code": original_combined,
-                        "replacement_code": current_combined,
-                        "source_context": ""
-                    }
                 continue
             
             if component_type == "Adversarials":

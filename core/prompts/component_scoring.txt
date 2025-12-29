@@ -26,8 +26,10 @@ Output (JSON only, no markdown):
 }}
 
 
-Example:
+Examples of Ego and Adversarial component:
+Example 1:
 
+""" 
 User Requirements:
 A car travels forward, following another vehicle.
 
@@ -37,9 +39,10 @@ A car travels forward
 Score: 80 
 Is Satisfied: True
 Differences: Following another vehicle could be achieved by following a lane or following a trajectory in spatial relation, so it's a good enough match
-
+"""
 
 Example 2:
+"""
 User Requirements:
 A car is traveling forward, then suddenly stops.
 
@@ -49,3 +52,45 @@ A car is turning right at 3-way intersection.
 Score: 0
 Is Satisfied: False
 Differences: The retrieved component is not a sudden stop, it's a right turn
+"""
+
+Example 2:
+"""
+User Requirements:
+A car is traveling forward, then suddenly stops.
+
+Retrieved Component:
+A car follows a trajectory, making a sudden stop if it gets too close to other objects, and then continues straight
+
+Score: 60
+Is Satisfied: False
+Differences: The retrieved component does not include a normal sudden stop, it's a sudden stop if it gets too close to other objects
+"""
+
+Example 3:
+"""
+User Requirements:
+A car travels forward, then suddenly stops.
+
+Retrieved Component:
+A car initially travels forward, then stops for a period, and then resumes moving forward.
+
+Score: 60 
+Is Satisfied: False
+Differences: The retrieved component is not a sudden stop, it's a resume of movement.
+"""
+
+Examples of Spatial Relation component:
+Example 1:
+"""
+User Requirements:
+The ego vehicle is positioned behind the adversarial vehicle on a straight road.
+
+Retrieved Component:
+The ego vehicle and adversarial vehicle are positioned on the same lane of a road, with the adversarial vehicle ahead of the ego vehicle.
+
+Score: 100 
+Is Satisfied: True
+Differences: The retrieved component fully meets the requirement of the ego vehicle being positioned behind the adversarial vehicle on a straight road.
+"""
+

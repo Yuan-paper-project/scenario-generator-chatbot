@@ -98,23 +98,12 @@ class ScenarioMilvusClient:
                 logger.warning(f"Failed to retrieve {component_type} for scenario {scenario_id}: {e}")
         
         try:
-            expr = f'scenario_id == "{scenario_id}" and component_type == "Ego"'
-            results = self.collection.query(
-                expr=expr,
-                output_fields=["scenario_id", "component_type", "description", "code"],
-                limit=100
-            )
-            
-            if results:
-                components["Egos"] = []
-                for entity in results:
-                    components["Egos"].append({
-                        "description": entity.get("description", ""),
-                        "code": entity.get("code", ""),
-                        "scenario_id": scenario_id
-                    })
+            component = self.query_component_by_scenario_and_type(scenario_id, "Ego")
+            if component:
+                component["scenario_id"] = scenario_id
+                components["Ego"] = component
         except Exception as e:
-            logger.warning(f"Failed to retrieve Egos for scenario {scenario_id}: {e}")
+            logger.warning(f"Failed to retrieve Ego for scenario {scenario_id}: {e}")
         
         try:
             expr = f'scenario_id == "{scenario_id}" and component_type == "Adversarial"'

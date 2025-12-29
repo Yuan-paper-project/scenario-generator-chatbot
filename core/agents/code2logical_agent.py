@@ -32,10 +32,7 @@ class Code2LogicalAgent(BaseAgent):
 
         {{
         "Scenario": "<ONE short sentence describing the main event>",
-        "Egos": [
-            "<ONE short sentence describing the first ego vehicle including its type (restricted to car, pedestrian) and behavior>",
-            "<ONE short sentence describing the second ego vehicle including its type (restricted to car, pedestrian) and behavior if there are multiple egos>"
-        ],
+        "Ego": "<ONE short sentence describing the ego vehicle including its type (restricted to car, pedestrian) and behavior>",
         "Adversarials": [
             "<ONE short sentence describing the first adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
             "<ONE short sentence describing the second adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
@@ -47,9 +44,8 @@ class Code2LogicalAgent(BaseAgent):
         }}
                 
         Follow the rules:
-        - Do not contain spatial relation in egos and adversarials components
+        - Do not contain spatial relation in ego and adversarials components
         - Start descriptions with the subject (e.g.,  "The ego vehicle", "Debris objects"), for example, "The ego vehicle travel forward, then make a right turn"
-        - For Egos, create a separate entry for each distinct ego object in the scenario (usually 1, but could be multiple)
         - For Adversarials, create a separate entry for each distinct adversarial object in the scenario
         - Combine object type and behavior in a single description
 
@@ -57,9 +53,7 @@ class Code2LogicalAgent(BaseAgent):
         Example 1 (single ego, single adversarial):
         {{
         "Scenario": "Ego vehicle goes straight and an adversary vehicle makes a right turn at 3-way intersection.",
-        "Egos": [
-            "A car travels forward and decelerates if it gets too close to other objects"
-        ],
+        "Ego": "A car travels forward and decelerates if it gets too close to other objects",
         "Adversarials": [
             "A car travels forward, then makes a right turn"
         ],
