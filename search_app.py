@@ -78,9 +78,8 @@ class SearchChatbotApp:
             if not self.awaiting_confirmation:
                 reset_agent_logger()
                 self.generation_counter += 1
-                generation_id = f"generation_{self.generation_counter:03d}"
-                self.agent_logger = initialize_agent_logger(generation_id)
-                logging.info(f"📁 New generation started: {generation_id}")
+                self.agent_logger = initialize_agent_logger(user_query=message)
+                logging.info(f"📁 New generation started: {self.agent_logger.generation_id}")
             
             result = None
             run_func = None
@@ -169,8 +168,7 @@ class SearchChatbotApp:
             
             reset_agent_logger()
             self.generation_counter += 1
-            generation_id = f"validation_{self.generation_counter:03d}"
-            self.agent_logger = initialize_agent_logger(generation_id)
+            self.agent_logger = initialize_agent_logger(session_id=f"validation_{self.generation_counter:03d}")
             
             logging.info(f"🚀Validation started")
             
@@ -226,8 +224,7 @@ class SearchChatbotApp:
             
             reset_agent_logger()
             self.generation_counter += 1
-            generation_id = f"autocorrect_{self.generation_counter:03d}"
-            self.agent_logger = initialize_agent_logger(generation_id)
+            self.agent_logger = initialize_agent_logger(session_id=f"autocorrect_{self.generation_counter:03d}")
             
             logging.info(f"🚀 Auto-correction started")
             

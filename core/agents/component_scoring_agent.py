@@ -25,10 +25,11 @@ class ComponentScoringAgent(BaseAgent):
         component_type: str,
         user_criteria: str,
         retrieved_description: str,
-        scenario_id: str = None
+        scenario_id: str = None,
+        component_code: str = None
     ) -> Dict[str, Any]:
-        # Store component_type for logging purposes
         self._current_component_type = component_type
+        self._current_component_code = component_code
         
         response = self.invoke(context={
             "component_type": component_type,
@@ -91,6 +92,7 @@ class ComponentScoringAgent(BaseAgent):
         for component_type, criteria_desc in component_scores.items():
             user_criteria = criteria_desc.get("user_criteria", "")
             retrieved_description = criteria_desc.get("retrieved_description", "")
+            component_code = criteria_desc.get("component_code", "")
             
             if not user_criteria or not retrieved_description:
                 print(f"[WARNING] Skipping {component_type}: missing criteria or description")
@@ -100,7 +102,8 @@ class ComponentScoringAgent(BaseAgent):
                 component_type=component_type,
                 user_criteria=user_criteria,
                 retrieved_description=retrieved_description,
-                scenario_id=scenario_id
+                scenario_id=scenario_id,
+                component_code=component_code
             )
             
             results[component_type] = result

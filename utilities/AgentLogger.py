@@ -1,14 +1,26 @@
 import os
 import json
 import logging
+import random
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 
 
 class AgentLogger:
-    def __init__(self, generation_id: Optional[str] = None):
-        self.generation_id = generation_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    def __init__(self, generation_id: Optional[str] = None, user_query: Optional[str] = None):
+        if generation_id:
+            self.generation_id = generation_id
+        else:
+            date_str = datetime.now().strftime("%Y%m%d")
+            random_num = random.randint(1000, 9999)
+            if user_query:
+                short_name = self._create_short_name(user_query)
+                self.generation_id = f"{date_str}_{random_num}_{short_name}"
+            else:
+                self.generation_id = f"{date_str}_{random_num}_unknown"
+        
         self.results_dir = Path("results") / self.generation_id
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
@@ -18,13 +30,26 @@ class AgentLogger:
         
         self.session_log_file = self.results_dir / "session_log.jsonl"
         
-        self._write_session_metadata()
+        self._write_session_metadata(user_query)
         
         logging.info(f"📁 AgentLogger initialized. Logs will be saved to: {self.results_dir}")
     
-    def _write_session_metadata(self):
+    def _create_short_name(self, user_query: str, max_words: int = 5) -> str:
+        clean_query = re.sub(r'[^\w\s-]', '', user_query.lower())
+        
+        words = clean_query.split()[:max_words]
+        
+        short_name = '_'.join(words)
+        
+        if len(short_name) > 50:
+            short_name = short_name[:50]
+        
+        return short_name if short_name else "scenario"
+    
+    def _write_session_metadata(self, user_query: Optional[str] = None):
         metadata = {
             "generation_id": self.generation_id,
+            "user_query": user_query,
             "start_time": datetime.now().isoformat(),
             "results_directory": str(self.results_dir)
         }
@@ -64,6 +89,14 @@ class AgentLogger:
             "response": response
         }
         
+        if "Scoring" in formatted_agent_name and response and metadata:
+            try:
+                response_json = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+                if response_json.get("is_satisfied") and metadata.get("component_code"):
+                    log_entry["component_code"] = metadata["component_code"]
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        
         with open(self.session_log_file, 'a', encoding='utf-8') as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
         
@@ -96,6 +129,13 @@ class AgentLogger:
             else:
                 f.write("(No response)")
             f.write("\n\n")
+            
+            if log_entry.get('component_code'):
+                f.write("-" * 80 + "\n")
+                f.write("COMPONENT CODE (SATISFIED)\n")
+                f.write("-" * 80 + "\n")
+                f.write(log_entry['component_code'])
+                f.write("\n\n")
             
             f.write("=" * 80 + "\n")
             f.write("END OF LOG\n")
@@ -140,9 +180,9 @@ def get_agent_logger() -> Optional[AgentLogger]:
     return _global_agent_logger
 
 
-def initialize_agent_logger(session_id: Optional[str] = None) -> AgentLogger:
+def initialize_agent_logger(session_id: Optional[str] = None, user_query: Optional[str] = None) -> AgentLogger:
     global _global_agent_logger
-    _global_agent_logger = AgentLogger(session_id)
+    _global_agent_logger = AgentLogger(session_id, user_query)
     return _global_agent_logger
 
 
