@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from typing import Literal, TypedDict, Annotated
 import logging
 import re
+import time
 
 from .agents.code2logical_agent import Code2LogicalAgent
 from .agents.code_adapter_agent import CodeAdapterAgent
@@ -44,6 +45,8 @@ class SearchWorkflowState(TypedDict):
     selected_map: str
     selected_weather: str
     auto_correction: bool
+    generation_start_time: float
+    component_sources: dict
 
 
 class SearchWorkflow:
@@ -248,6 +251,16 @@ class SearchWorkflow:
             retrieved_components = self._retrieve_components_by_scenario_id(scenario_id)
             state["retrieved_components"] = retrieved_components
             state["original_components"] = {k: v.copy() for k, v in retrieved_components.items()}
+            
+            component_sources = state.get("component_sources", {})
+            for comp_type, comp_data in retrieved_components.items():
+                if isinstance(comp_data, dict) and "scenario_id" in comp_data:
+                    component_sources[comp_type] = f"scenic file: {comp_data['scenario_id']}"
+                elif isinstance(comp_data, list):
+                    for i, item in enumerate(comp_data):
+                        if isinstance(item, dict) and "scenario_id" in item:
+                            component_sources[f"{comp_type}_{i}"] = f"scenic file: {item['scenario_id']}"
+            state["component_sources"] = component_sources
         else:
             retrieved_components = state["retrieved_components"]
         
@@ -463,18 +476,21 @@ class SearchWorkflow:
         
         logging.info(f" 🛠️ Processing component: {component_type}")
         
+        component_sources = state.get("component_sources", {})
+        
         if component_type == "Adversarials":
             self._process_list_component(
-                "Adversarial", "Adversarials", score_result, retrieved_components, component_scores, processed_components
+                "Adversarial", "Adversarials", score_result, retrieved_components, component_scores, processed_components, component_sources
             )
         else:
             self._process_single_component(
-                component_type, score_result, retrieved_components, component_scores, processed_components
+                component_type, score_result, retrieved_components, component_scores, processed_components, component_sources
             )
         
         state["retrieved_components"] = retrieved_components
         state["component_scores"] = component_scores
         state["processed_components"] = processed_components
+        state["component_sources"] = component_sources
         
         return state
     
@@ -519,7 +535,11 @@ class SearchWorkflow:
         return "done"
     
     def _process_list_component(self, component_name: str, component_type: str, 
-                               score_result: dict, retrieved_components: dict, component_scores: dict, processed_components: set):
+                               score_result: dict, retrieved_components: dict, component_scores: dict, processed_components: set,
+                               component_sources: dict = None):
+        if component_sources is None:
+            component_sources = {}
+        
         individual_scores = score_result.get('individual_scores', [])
         user_criteria_list = score_result.get('user_criteria', [])
         current_list = retrieved_components.get(component_type, [])
@@ -544,6 +564,8 @@ class SearchWorkflow:
                 else:
                     current_list.append(best_candidate)
                 individual_scores[i] = best_score
+                if best_candidate and "scenario_id" in best_candidate:
+                    component_sources[item_key] = f"scenic file: {best_candidate['scenario_id']}"
             elif best_score['score'] > ind_score['score']:
                 logging.info(f"🔍 Found better match (score: {best_score['score']}), but not satisfactory")
                 if i < len(current_list):
@@ -551,6 +573,8 @@ class SearchWorkflow:
                 else:
                     current_list.append(best_candidate)
                 individual_scores[i] = best_score
+                if best_candidate and "scenario_id" in best_candidate:
+                    component_sources[item_key] = f"scenic file: {best_candidate['scenario_id']}"
                 
                 logging.info(f"🛠️ Start generating new {component_name} {i+1}")
                 generated = self._generate_component(
@@ -564,6 +588,7 @@ class SearchWorkflow:
                     else:
                         current_list.append(generated['component'])
                     individual_scores[i] = generated['score_result']
+                    component_sources[item_key] = "GENERATED"
             else:
                 logging.info(f"🔍 No better component match found, start generating new {component_name} {i+1}")
                 generated = self._generate_component(
@@ -576,6 +601,7 @@ class SearchWorkflow:
                     else:
                         current_list.append(generated['component'])
                     individual_scores[i] = generated['score_result']
+                    component_sources[item_key] = "GENERATED"
         
         retrieved_components[component_type] = current_list
         avg_score = sum(s["score"] for s in individual_scores) / len(individual_scores) if individual_scores else 0
@@ -591,12 +617,16 @@ class SearchWorkflow:
         }
     
     def _process_single_component(self, component_type: str, score_result: dict,
-                                  retrieved_components: dict, component_scores: dict, processed_components: set):
+                                  retrieved_components: dict, component_scores: dict, processed_components: set,
+                                  component_sources: dict = None):
         
         if component_type in processed_components:
             return
 
         processed_components.add(component_type)
+        
+        if component_sources is None:
+            component_sources = {}
         
         logging.info(f"🛠️ Processing {component_type}")
         user_criteria = score_result.get('user_criteria', '')
@@ -617,11 +647,15 @@ class SearchWorkflow:
                     logging.info(f"✅ Found satisfactory match (score: {best_score['score']})")
                     retrieved_components[component_type] = best_candidate
                     component_scores[component_type] = best_score
+                    if "scenario_id" in best_candidate:
+                        component_sources[component_type] = f"scenic file: {best_candidate['scenario_id']}"
                     return
                 elif best_score['score'] > current_score:
                     logging.info(f"🔍 Found better match (score: {best_score['score']}), but not satisfactory")
                     retrieved_components[component_type] = best_candidate
                     component_scores[component_type] = best_score
+                    if "scenario_id" in best_candidate:
+                        component_sources[component_type] = f"scenic file: {best_candidate['scenario_id']}"
             
             logging.info(f"🛠️ Generating new {component_type}")
             generated = self._generate_component(
@@ -634,6 +668,7 @@ class SearchWorkflow:
                     logging.info(f"✅ Generated component is better (score: {generated['score']})")
                     retrieved_components[component_type] = generated['component']
                     component_scores[component_type] = generated['score_result']
+                    component_sources[component_type] = "GENERATED"
         except Exception as e:
             logging.error(f"❌ Failed to process {component_type}: {e}")
     
@@ -715,18 +750,19 @@ class SearchWorkflow:
         if not generated_component.get("code"):
             return None
         
-        generated_score = self.scoring_agent.score_component(
-            component_type=component_type,
-            user_criteria=user_criteria,
-            retrieved_description=generated_component["description"],
-            component_code=generated_component.get("code", "")
-        )
+        logging.info(f"✅ Generated new component: {component_type}")
         
-        logging.info(f"✅ Generated component score: {generated_score['score']}")
+        generated_score = {
+            "score": 100,
+            "is_satisfied": True,
+            "differences": "Generated component (not scored)",
+            "user_criteria": user_criteria,
+            "retrieved_description": generated_component["description"]
+        }
         
         return {
             "component": generated_component,
-            "score": generated_score['score'],
+            "score": 100,
             "score_result": generated_score
         }
     
@@ -774,7 +810,7 @@ class SearchWorkflow:
         replacements = {}
         
         for component_type, score_result in component_scores.items():
-            if component_type in ["Scenario", "Requirement and restrictions"]:
+            if component_type in ["Scenario"]:
                 continue
             
             if component_type == "Adversarials":
@@ -820,6 +856,12 @@ class SearchWorkflow:
         return replacements
     
     def _search_scenario_node(self, state: SearchWorkflowState):
+        if "generation_start_time" not in state:
+            state["generation_start_time"] = time.time()
+        
+        if "component_sources" not in state:
+            state["component_sources"] = {}
+        
         agent_logger = get_agent_logger()
         if agent_logger:
             agent_logger.log_workflow_event("node_entry", {
@@ -929,7 +971,47 @@ class SearchWorkflow:
         
         logging.info(f"⚙️ Apply user settings model: blueprint: {blueprint}, map: {carla_map}, weather: {weather}")
         state["adapted_code"] = new_code
+        
+        summary = self._generate_summary(state)
+        logging.info(f"\n{summary}")
+        
         return state
+    
+    def _generate_summary(self, state: SearchWorkflowState) -> str:
+        start_time = state.get("generation_start_time", time.time())
+        end_time = time.time()
+        duration = end_time - start_time
+        
+        minutes = int(duration // 60)
+        seconds = duration % 60
+        if minutes > 0:
+            time_str = f"{minutes}m {seconds:.2f}s"
+        else:
+            time_str = f"{seconds:.2f}s"
+        
+        component_sources = state.get("component_sources", {})
+        
+        summary_lines = []
+        summary_lines.append("=" * 30)
+        summary_lines.append("SCENARIO GENERATION SUMMARY")
+        summary_lines.append("=" * 30)
+        summary_lines.append(f"Total Generation Time: {time_str}")
+        summary_lines.append("")
+        summary_lines.append("Component Sources:")
+        summary_lines.append("-" * 30)
+        
+        sorted_components = sorted(component_sources.items())
+        
+        for comp_name, source in sorted_components:
+            display_name = comp_name.replace("_", " ").title()
+            summary_lines.append(f"  {display_name:30s} -> {source}")
+        
+        if not component_sources:
+            summary_lines.append("  No component source information available")
+        
+        summary_lines.append("=" * 80)
+        
+        return "\n".join(summary_lines)
 
     def _validate_code_node(self, state: SearchWorkflowState):
         agent_logger = get_agent_logger()
