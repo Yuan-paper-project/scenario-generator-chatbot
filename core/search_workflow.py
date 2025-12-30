@@ -14,7 +14,7 @@ from .agents.component_assembler_agent import ComponentAssemblerAgent
 from .agents.component_generator_agent import ComponentGeneratorAgent
 from .agents.CodeValidator import CodeValidator
 from .agents.ErrorCorrector import ErrorCorrector
-from .agents.SettingsUpdateAgent import SettingsUpdateAgent
+from .agents.HeaderGenerator import HeaderGeneratorAgent
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
@@ -59,7 +59,7 @@ class SearchWorkflow:
         self.generator_agent = ComponentGeneratorAgent() 
         self.code_validator = CodeValidator()
         self.error_corrector = ErrorCorrector()
-        self.settings_agent = SettingsUpdateAgent()
+        self.header_generator = HeaderGeneratorAgent()
         self.generation_threshold = 50
         
         try:
@@ -247,22 +247,30 @@ class SearchWorkflow:
         
         logging.info(f"📝 Scoring components for scenario ID: {scenario_id}")
         
-        if not state.get("retrieved_components"):
-            retrieved_components = self._retrieve_components_by_scenario_id(scenario_id)
+        retrieved_components = state.get("retrieved_components", {})
+        
+        if not retrieved_components or "Scenario" not in retrieved_components:
+            scenario_components = self._retrieve_components_by_scenario_id(scenario_id)
+            
+            for comp_type, comp_data in scenario_components.items():
+                if comp_type not in retrieved_components:
+                    retrieved_components[comp_type] = comp_data
+            
             state["retrieved_components"] = retrieved_components
-            state["original_components"] = {k: v.copy() for k, v in retrieved_components.items()}
+            
+            if not state.get("original_components"):
+                state["original_components"] = {k: v.copy() for k, v in scenario_components.items()}
             
             component_sources = state.get("component_sources", {})
-            for comp_type, comp_data in retrieved_components.items():
-                if isinstance(comp_data, dict) and "scenario_id" in comp_data:
-                    component_sources[comp_type] = f"scenic file: {comp_data['scenario_id']}"
-                elif isinstance(comp_data, list):
-                    for i, item in enumerate(comp_data):
-                        if isinstance(item, dict) and "scenario_id" in item:
-                            component_sources[f"{comp_type}_{i}"] = f"scenic file: {item['scenario_id']}"
+            for comp_type, comp_data in scenario_components.items():
+                if comp_type not in component_sources:
+                    if isinstance(comp_data, dict) and "scenario_id" in comp_data:
+                        component_sources[comp_type] = f"scenic file: {comp_data['scenario_id']}"
+                    elif isinstance(comp_data, list):
+                        for i, item in enumerate(comp_data):
+                            if isinstance(item, dict) and "scenario_id" in item:
+                                component_sources[f"{comp_type}_{i}"] = f"scenic file: {item['scenario_id']}"
             state["component_sources"] = component_sources
-        else:
-            retrieved_components = state["retrieved_components"]
         
         if not retrieved_components:
             return state
@@ -270,10 +278,9 @@ class SearchWorkflow:
         logical_interpretation = state["logical_interpretation"]
         user_criteria_dict = parse_json_from_text(logical_interpretation)
         
-        ## remove components not in user criteria
         components_to_remove = [
             comp for comp in list(retrieved_components.keys())
-            if comp not in ["Scenario"] and comp not in user_criteria_dict
+            if comp not in ["Scenario", "Header"] and comp not in user_criteria_dict
         ]
         
         for component_type in components_to_remove:
@@ -307,7 +314,7 @@ class SearchWorkflow:
         components_to_score = {}
         
         for component_type in user_criteria_dict.keys():
-            if component_type in ["Scenario", "Requirement and restrictions", "Adversarials"]:
+            if component_type in ["Scenario", "Header", "Requirement and restrictions", "Adversarials"]:
                 continue
 
             if component_type in retrieved_components:
@@ -458,14 +465,16 @@ class SearchWorkflow:
     def _search_snippets_node(self, state: SearchWorkflowState):
         component_scores = state.get("component_scores", {})
         retrieved_components = state.get("retrieved_components", {})
-        processed_components = state.get("processed_components", set()) # Initialize if missing
+        processed_components = state.get("processed_components", set())
         
         if not component_scores or not retrieved_components:
             return state
         
+        processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        
         unsatisfied_components = [
-            comp for comp, result in component_scores.items()
-            if not result['is_satisfied']
+            comp for comp in processing_order
+            if comp in component_scores and not component_scores[comp]['is_satisfied']
         ]
         
         if not unsatisfied_components:
@@ -501,9 +510,11 @@ class SearchWorkflow:
         if not component_scores:
             return "done"
         
+        processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        
         unsatisfied_components = [
-            comp for comp, result in component_scores.items()
-            if not result['is_satisfied']
+            comp for comp in processing_order
+            if comp in component_scores and not component_scores[comp]['is_satisfied']
         ]
         
         remaining_work = False
@@ -552,7 +563,7 @@ class SearchWorkflow:
             
             processed_components.add(item_key)
             
-            logging.info(f" 🔍 Searching for better {component_name} {i+1}...")
+            logging.info(f" 🔍 Searching for better {component_name}")
             best_candidate, best_score = self._search_component_candidates(
                 user_criteria, component_name, i
             )
@@ -578,7 +589,7 @@ class SearchWorkflow:
                 
                 logging.info(f"🛠️ Start generating new {component_name} {i+1}")
                 generated = self._generate_component(
-                    component_name, user_criteria, retrieved_components
+                    component_name, user_criteria, retrieved_components, component_scores
                 )
                 
                 if generated and generated['score'] > best_score['score']:
@@ -592,7 +603,7 @@ class SearchWorkflow:
             else:
                 logging.info(f"🔍 No better component match found, start generating new {component_name} {i+1}")
                 generated = self._generate_component(
-                    component_name, user_criteria, retrieved_components
+                    component_name, user_criteria, retrieved_components, component_scores
                 )
                 
                 if generated:
@@ -659,7 +670,7 @@ class SearchWorkflow:
             
             logging.info(f"🛠️ Generating new {component_type}")
             generated = self._generate_component(
-                component_type, user_criteria, retrieved_components
+                component_type, user_criteria, retrieved_components, component_scores
             )
             
             if generated:
@@ -737,14 +748,40 @@ class SearchWorkflow:
         
         return best_candidate, best_score
     
-    def _generate_component(self, component_type: str, user_criteria: str, retrieved_components: dict):
-        scenario_component = retrieved_components.get("Scenario", {})
-        assembled_code = scenario_component.get("code", "")
+    def _build_ready_components(self, retrieved_components: dict, component_scores: dict, current_component: str) -> dict:
+        processing_order = ["Header", "Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        ready_components = {}
+        
+        for comp_type in processing_order:
+            if comp_type == current_component:
+                break
+            
+            if comp_type not in retrieved_components:
+                continue
+            
+            comp_data = retrieved_components.get(comp_type, {})
+            
+            if comp_type == "Adversarials":
+                if isinstance(comp_data, list):
+                    adv_codes = [adv.get("code", "") for adv in comp_data if adv.get("code")]
+                    if adv_codes:
+                        ready_components[comp_type] = adv_codes
+            else:
+                if isinstance(comp_data, dict) and comp_data.get("code"):
+                    ready_components[comp_type] = comp_data.get("code", "")
+        
+        return ready_components
+    
+    def _generate_component(self, component_type: str, user_criteria: str, retrieved_components: dict, component_scores: dict = None):
+        if component_scores is None:
+            component_scores = {}
+        
+        ready_components = self._build_ready_components(retrieved_components, component_scores, component_type)
         
         generated_component = self.generator_agent.generate_component(
             component_type=component_type,
             user_criteria=user_criteria,
-            assembled_code=assembled_code
+            ready_components=ready_components
         )
         
         if not generated_component.get("code"):
@@ -768,92 +805,41 @@ class SearchWorkflow:
     
     def _assemble_code_node(self, state: SearchWorkflowState):
         retrieved_components = state.get("retrieved_components", {})
-        original_components = state.get("original_components", {})
         
         if not retrieved_components:
             return state
         
-        search_results = state.get("search_results", [])
-        if not search_results:
-            state["workflow_status"] = "completed"
-            state["messages"].append(AIMessage(content="Error: No search results found."))
-            return state
+        logging.info(f"🧩 Assembling scenario by concatenating components")
+        logging.info(f"🔍 Available components: {list(retrieved_components.keys())}")
         
-        base_scenario_id = search_results[0].get("scenario_id", "Unknown")
-        logical_interpretation = state.get("logical_interpretation", "")
-        user_criteria_dict = parse_json_from_text(logical_interpretation)
+        component_order = ["Header", "Spatial Relation", "Ego", "Adversarials", "Requirement and restrictions"]
+        code_parts = []
         
-        logging.info(f"🧩 Assembling scenario from base: {base_scenario_id}")
+        for component_type in component_order:
+            if component_type not in retrieved_components:
+                logging.info(f"⚠️ Component {component_type} not found in retrieved_components")
+                continue
+            
+            comp_data = retrieved_components.get(component_type, {})
+            
+            if component_type == "Adversarials":
+                if isinstance(comp_data, list):
+                    for adv in comp_data:
+                        if isinstance(adv, dict) and adv.get("code"):
+                            code_parts.append(adv.get("code", ""))
+                            logging.info(f"✅ Added {component_type} code")
+            else:
+                if isinstance(comp_data, dict) and comp_data.get("code"):
+                    code_parts.append(comp_data.get("code", ""))
+                    logging.info(f"✅ Added {component_type} code ")
+                else:
+                    logging.info(f"⚠️ Component {component_type} has no code: {comp_data}")
         
-        scenario_component = retrieved_components.get("Scenario", {})
-        base_code = scenario_component.get("code", "")
-        
-        if not base_code:
-            return state
-        
-        component_scores = state.get("component_scores", {})
-        replacements = self._build_replacements(
-            component_scores, retrieved_components, original_components
-        )
-        
-        if replacements:
-            logging.info(f"🔄 Applying {len(replacements)} component replacement")
-            final_code = self.assembler_agent.assemble_code(base_code, replacements)
-        else:
-            final_code = base_code
+        final_code = "\n\n".join(code_parts)
         
         state["selected_code"] = final_code
         return state
     
-    def _build_replacements(self, component_scores: dict, retrieved_components: dict, 
-                           original_components: dict) -> dict:
-        replacements = {}
-        
-        for component_type, score_result in component_scores.items():
-            if component_type in ["Scenario"]:
-                continue
-            
-            if component_type == "Adversarials":
-                original_adversarials = original_components.get("Adversarials", [])
-                current_adversarials = retrieved_components.get("Adversarials", [])
-                original_combined = "\n\n".join([adv.get("code", "") for adv in original_adversarials if adv.get("code")])
-                current_combined = "\n\n".join([adv.get("code", "") for adv in current_adversarials if adv.get("code")])
-                
-                if original_combined != current_combined:
-                    replacements["Adversarials"] = {
-                        "original_code": original_combined,
-                        "replacement_code": current_combined,
-                        "source_context": ""
-                    }
-                continue
-            
-            original_component = original_components.get(component_type, {})
-            current_component = retrieved_components.get(component_type, {})
-            original_code = original_component.get("code", "")
-            current_code = current_component.get("code", "")
-            
-            should_replace = (
-                (not original_code and current_code) or
-                (original_code and current_code and original_code != current_code) or
-                (not score_result.get('is_satisfied') and current_code)
-            )
-            
-            if should_replace:
-                source_scenario_id = current_component.get("scenario_id", "")
-                source_context = ""
-                
-                if source_scenario_id and source_scenario_id != "GENERATED":
-                    source_components = self._retrieve_components_by_scenario_id(source_scenario_id)
-                    if source_components:
-                        source_context = source_components.get("Scenario", {}).get("code", "")
-                
-                replacements[component_type] = {
-                    "original_code": original_code,
-                    "replacement_code": current_code,
-                    "source_context": source_context
-                }
-        
-        return replacements
     
     def _search_scenario_node(self, state: SearchWorkflowState):
         if "generation_start_time" not in state:
@@ -861,6 +847,28 @@ class SearchWorkflow:
         
         if "component_sources" not in state:
             state["component_sources"] = {}
+        
+        if "retrieved_components" not in state:
+            state["retrieved_components"] = {}
+        
+        if "Header" not in state["retrieved_components"]:
+            state["retrieved_components"]["Header"] = {}
+        
+        user_query = state.get("user_query", "")
+        selected_map = state.get("selected_map", "Town03")
+        selected_blueprint = state.get("selected_blueprint", "vehicle.audi.a2")
+        selected_weather = state.get("selected_weather", "ClearNoon")
+        
+        logging.info(f"🎨 Generating Header component")
+        header_component = self.header_generator.generate_header(
+            user_query=user_query,
+            carla_map=selected_map,
+            blueprint=selected_blueprint,
+            weather=selected_weather
+        )
+        
+        state["retrieved_components"]["Header"] = header_component
+        state["component_sources"]["Header"] = "GENERATED"
         
         agent_logger = get_agent_logger()
         if agent_logger:
@@ -962,15 +970,7 @@ class SearchWorkflow:
         carla_map = state.get("selected_map")
         weather = state.get("selected_weather")
         
-        new_code = self.settings_agent.process(
-            code=code, 
-            blueprint=blueprint, 
-            carla_map=carla_map, 
-            weather=weather
-        )
-        
-        logging.info(f"⚙️ Apply user settings model: blueprint: {blueprint}, map: {carla_map}, weather: {weather}")
-        state["adapted_code"] = new_code
+        logging.info(f"⚙️ User settings: blueprint: {blueprint}, map: {carla_map}, weather: {weather}")
         
         summary = self._generate_summary(state)
         logging.info(f"\n{summary}")
@@ -1000,16 +1000,22 @@ class SearchWorkflow:
         summary_lines.append("Component Sources:")
         summary_lines.append("-" * 30)
         
-        sorted_components = sorted(component_sources.items())
+        component_order = ["Header", "Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
         
-        for comp_name, source in sorted_components:
-            display_name = comp_name.replace("_", " ").title()
-            summary_lines.append(f"  {display_name:30s} -> {source}")
+        for comp_type in component_order:
+            if comp_type in component_sources:
+                source = component_sources[comp_type]
+                summary_lines.append(f"  {comp_type:30s} -> {source}")
+            elif comp_type == "Adversarials":
+                adv_components = {k: v for k, v in component_sources.items() if k.startswith("Adversarials_")}
+                for adv_name, adv_source in sorted(adv_components.items()):
+                    display_name = adv_name.replace("_", " ").title()
+                    summary_lines.append(f"  {display_name:30s} -> {adv_source}")
         
         if not component_sources:
             summary_lines.append("  No component source information available")
         
-        summary_lines.append("=" * 80)
+        summary_lines.append("=" * 30)
         
         return "\n".join(summary_lines)
 

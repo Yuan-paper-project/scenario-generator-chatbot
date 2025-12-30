@@ -35,26 +35,29 @@ class ComponentGeneratorAgent(BaseAgent):
         self,
         component_type: str,
         user_criteria: str,
-        assembled_code: str = ""
+        ready_components: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        return self.generate_component(component_type, user_criteria, assembled_code)
+        return self.generate_component(component_type, user_criteria, ready_components)
     
     def generate_component(
         self,
         component_type: str,
         user_criteria: str,
-        assembled_code: str = ""
+        ready_components: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-
+        if ready_components is None:
+            ready_components = {}
         
         reference_components = self._get_reference_components(user_criteria, component_type)
         
         documentation = self._get_documentation(component_type)
         
+        ready_components_str = self._format_ready_components(ready_components)
+        
         response = self.invoke(context={
             "component_type": component_type,
             "user_criteria": user_criteria,
-            "assembled_code": assembled_code if assembled_code else "# No previous code available",
+            "ready_components": ready_components_str,
             "reference_components": reference_components,
             "documentation": documentation
         })
@@ -106,6 +109,20 @@ class ComponentGeneratorAgent(BaseAgent):
                 "is_generated": False,
                 "scenario_id": "ERROR"
             }
+    
+    def _format_ready_components(self, ready_components: Dict[str, Any]) -> str:
+        if not ready_components:
+            return "No components are ready yet."
+        
+        formatted_parts = []
+        for comp_type, comp_code in ready_components.items():
+            if isinstance(comp_code, list):
+                for i, code in enumerate(comp_code):
+                    formatted_parts.append(f"## {comp_type} {i+1} ##\n{code}\n")
+            else:
+                formatted_parts.append(f"## {comp_type} ##\n{comp_code}\n")
+        
+        return "\n".join(formatted_parts)
     
     def _get_reference_components(self, query: str, component_type: str, limit: int = 3) -> str:
 

@@ -5,10 +5,9 @@ We have a Scenic code needed to be updated:
 {retrieved_code}
 
 Instructions:
-1. Replace the description line in the code with the user's scenario description
-2. Adjust variable values in the code to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes
-3. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
-4. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, order of the code and formatting
-5. Do not generate comments or explanations, only output the updated code
+1. Adjust variable values in the code to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes
+2. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
+3. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and THE EXACT ORDER OF ALL CODE SECTIONS (header, spatial relation, ego, adversarials, requirements)
+4. Do not generate comments or explanations, only output the updated code
 
 Now output the updated code:
