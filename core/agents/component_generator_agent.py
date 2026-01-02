@@ -11,10 +11,18 @@ class ComponentGeneratorAgent(BaseAgent):
         prompt = load_prompt("component_generator")
         super().__init__(
             prompt_template=prompt,
-            model_name="gemini-2.5-flash", 
+            model_name="gemini-3-flash-preview", 
             model_provider="google_genai",
             use_rag=False  
         )
+        
+        self.prompts = {
+            "ego": load_prompt("component_generator_ego"),
+            "adv": load_prompt("component_generator_adv"),
+            "spatial": load_prompt("component_generator_spatial"),
+            "requirement": load_prompt("component_generator_requirement"),
+            "default": prompt
+        }
         
         self.scenario_client = None
         self.doc_client = None
@@ -48,6 +56,12 @@ class ComponentGeneratorAgent(BaseAgent):
         if ready_components is None:
             ready_components = {}
         
+        prompt_key = self._get_prompt_key(component_type)
+        selected_prompt = self.prompts.get(prompt_key, self.prompts["default"])
+        
+        original_prompt = self.prompt_template
+        self.prompt_template = selected_prompt
+        
         reference_components = self._get_reference_components(user_criteria, component_type)
         
         documentation = self._get_documentation(component_type)
@@ -61,6 +75,8 @@ class ComponentGeneratorAgent(BaseAgent):
             "reference_components": reference_components,
             "documentation": documentation
         })
+        
+        self.prompt_template = original_prompt
         
         try:
             response_text = response.strip()
@@ -109,6 +125,22 @@ class ComponentGeneratorAgent(BaseAgent):
                 "is_generated": False,
                 "scenario_id": "ERROR"
             }
+    
+    def _get_prompt_key(self, component_type: str) -> str:
+        component_type_lower = component_type.lower()
+        if component_type_lower == "ego":
+            return "ego"
+        
+        if component_type_lower == "adversarial":
+            return "adv"
+        
+        if component_type_lower == "spatial relation":
+            return "spatial"
+        
+        if component_type_lower == "requirement and restrictions":
+            return "requirement"
+        
+        return "default"
     
     def _format_ready_components(self, ready_components: Dict[str, Any]) -> str:
         if not ready_components:
@@ -162,8 +194,8 @@ class ComponentGeneratorAgent(BaseAgent):
             return "# No documentation available"
         try:
             component_search_terms = {
-                "Ego": "Ego,behavior",
-                "Adversarial": "Adversarial,behavior",
+                "Ego": "Ego,behavior,operators, specifiers",
+                "Adversarial": "Adversarial,behavior,operators, specifiers",
                 "Spatial Relation": "network,egoSpawnPt,intersection,egoTrajectory,advSpawnPt,advTrajectory",
                 "Requirement and restrictions": "require,terminate,TrafficLight"
             }
