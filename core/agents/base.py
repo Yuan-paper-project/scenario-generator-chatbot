@@ -84,6 +84,9 @@ class BaseAgent(ABC):
             if hasattr(self, '_current_component_code') and self._current_component_code:
                 metadata["component_code"] = self._current_component_code
             
+            if hasattr(self, '_retrieved_code') and self._retrieved_code:
+                metadata["retrieved_code"] = self._retrieved_code
+            
             agent_logger.log_agent_interaction(
                 agent_name=self.__class__.__name__,
                 system_prompt=self.prompt_template_str,

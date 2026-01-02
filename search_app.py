@@ -297,8 +297,8 @@ def create_demo():
     
 
     with gr.Blocks(title="Scenic Scenario Search", theme=gr.themes.Soft(), css=".center-row { align-items: center !important; }")as demo:
-        gr.Markdown("## 🚗 Scenic Scenario Search & Retrieval")
-        gr.Markdown("Search database, confirm structure, and adapt code.")
+        gr.Markdown("## 🚗 Scenic Scenario Generation")
+        gr.Markdown("Send your request, confirm the structure, and generate the code.")
         
         with gr.Row():
             with gr.Column(scale=7):

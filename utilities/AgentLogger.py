@@ -97,6 +97,9 @@ class AgentLogger:
             except (json.JSONDecodeError, AttributeError):
                 pass
         
+        if formatted_agent_name == "CodeAdapterAgent" and metadata and metadata.get("retrieved_code"):
+            log_entry["code_before_adaptation"] = metadata["retrieved_code"]
+        
         with open(self.session_log_file, 'a', encoding='utf-8') as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
         
@@ -112,14 +115,12 @@ class AgentLogger:
             f.write(f"TIMESTAMP: {log_entry['timestamp']}\n")
             f.write("=" * 80 + "\n\n")
             
-            f.write("-" * 80 + "\n")
-            f.write("PROMPT\n")
-            f.write("-" * 80 + "\n")
-            if log_entry.get('full_prompt'):
-                f.write(log_entry['full_prompt'])
-            else:
-                f.write("(No prompt)")
-            f.write("\n\n")
+            if log_entry.get('code_before_adaptation'):
+                f.write("-" * 80 + "\n")
+                f.write("CODE BEFORE ADAPTATION\n")
+                f.write("-" * 80 + "\n")
+                f.write(log_entry['code_before_adaptation'])
+                f.write("\n\n")
             
             f.write("-" * 80 + "\n")
             f.write("RESPONSE\n")
@@ -128,6 +129,15 @@ class AgentLogger:
                 f.write(log_entry['response'])
             else:
                 f.write("(No response)")
+            f.write("\n\n")
+            
+            f.write("-" * 80 + "\n")
+            f.write("PROMPT\n")
+            f.write("-" * 80 + "\n")
+            if log_entry.get('full_prompt'):
+                f.write(log_entry['full_prompt'])
+            else:
+                f.write("(No prompt)")
             f.write("\n\n")
             
             if log_entry.get('component_code'):

@@ -1,5 +1,6 @@
 from .base import BaseAgent
 from core.prompts import load_prompt
+from utilities.AgentLogger import get_agent_logger
 
 class CodeAdapterAgent(BaseAgent):
     def __init__(self):
@@ -13,6 +14,8 @@ class CodeAdapterAgent(BaseAgent):
         )
     
     def process(self, user_description: str, retrieved_code: str) -> str:
+        self._retrieved_code = retrieved_code
+        
         response = self.invoke(context={
             "user_description": user_description,
             "retrieved_code": retrieved_code

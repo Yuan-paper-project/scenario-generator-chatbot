@@ -80,6 +80,7 @@ Is Satisfied: False
 Differences: The retrieved component is not a sudden stop, it's a resume of movement.
 """
 
+
 Examples of Spatial Relation component:
 Example 1:
 """

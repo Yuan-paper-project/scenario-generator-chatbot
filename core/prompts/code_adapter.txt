@@ -5,9 +5,132 @@ We have a Scenic code needed to be updated:
 {retrieved_code}
 
 Instructions:
-1. Adjust variable values in the code to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes
-2. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
-3. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and THE EXACT ORDER OF ALL CODE SECTIONS (header, spatial relation, ego, adversarials, requirements)
-4. Do not generate comments or explanations, only output the updated code
+1. Check if there is any not defined or mismatched variables or objects in the code. If so, correct them. 
+2. Adjust variable values in the code to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes
+3. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
+4. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and THE EXACT ORDER OF ALL CODE SECTIONS (header, spatial relation, ego, adversarials, requirements)
+5. Do not generate comments or explanations, only output the updated code
 
-Now output the updated code:
+The example original code:
+```scenic
+description = "Ego vehicle performs multiple lane changes to bypass a slow adversary and debris."
+param map = localPath('../../assets/maps/CARLA/Town05.xodr')
+param carla_map = 'Town05'
+model scenic.simulators.carla.model
+MODEL = 'vehicle.audi.a2'
+param weather = 'ClearNoon'
+
+lane = Uniform(*filter(lambda l: len(l.adjacentLanes) > 0, network.lanes))
+egoSpawnPt = new OrientedPoint in lane.centerline
+debrisSpawnPt = new OrientedPoint following roadDirection from egoSpawnPt for Range(18, 24)
+
+param EGO_SPEED = Range(7, 10)
+BYPASS_DIST = [15, 10]
+
+behavior EgoBehavior():
+	try:
+		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
+	interrupt when withinDistanceToAnyObjs(self, BYPASS_DIST[0]):
+		fasterLaneSec = self.laneSection.fasterLane
+		do LaneChangeBehavior(
+				laneSectionToSwitch=fasterLaneSec,
+				target_speed=globalParameters.EGO_SPEED)
+		do FollowLaneBehavior(
+				target_speed=globalParameters.EGO_SPEED,
+				laneToFollow=fasterLaneSec.lane) \
+			until (distance to barrier) > BYPASS_DIST[1]
+		slowerLaneSec = self.laneSection.slowerLane
+		do LaneChangeBehavior(
+				laneSectionToSwitch=slowerLaneSec,
+				target_speed=globalParameters.EGO_SPEED)
+		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED) 
+
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
+param ADV_INIT_SPEED = Range(2, 4)
+param ADV_END_SPEED = 2 * Range(7, 10)
+ADV_BUFFER_TIME = 5
+param ADV_DIST = Range(10, 15)
+
+behavior AdversaryBehavior():
+	do FollowLaneBehavior(target_speed=globalParameters.ADV_INIT_SPEED)
+
+adversary = new Car following roadDirection for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
+debris = new Debris at debrisSpawnPt,
+    facing -90 deg relative to debrisSpawnPt.heading,
+    with regionContainedIn None
+
+require ego.laneSection.fasterLane is not None
+terminate when (distance from ego to debrisSpawnPt) > 50
+terminate after 30 seconds
+```
+The analysis process is:
+1. barrier is not defined in the ego behavior, it should be debris in the scenario description. We need to correct it by changing barrier to debris rather than defining a new object. Because we need to avoid creating a new object, properties, behaviors as long as possible to avoid hallucination.
+2. the require condition includes the properties of the objects, which is not guaranteed to exist in the code. The ego might not have the laneSection property, so we need to remove the ego.laneSection.fasterLane is not None from the require condition.
+3. Changing lanes back to the original lane might mean the adversary hasn't passed yet, so we need to add a condition to check if the ego has already passed the adversary. Increase pass distance in order to ensure the ego has passed the adversary.
+4. The scenario will terminate when the ego has passed the debris spawn point by a certain distance. We need to add a condition to check if the ego has passed the adversary as well. 
+
+The example updated code:
+```scenic
+description = "Ego vehicle performs multiple lane changes to bypass a slow adversary and debris."
+param map = localPath('../../assets/maps/CARLA/Town05.xodr')
+param carla_map = 'Town05'
+model scenic.simulators.carla.model
+MODEL = 'vehicle.audi.a2'
+param weather = 'ClearNoon'
+
+lane = Uniform(*filter(lambda l: len(l.adjacentLanes) > 0, network.lanes))
+egoSpawnPt = new OrientedPoint in lane.centerline
+debrisSpawnPt = new OrientedPoint following roadDirection from egoSpawnPt for Range(18, 24)
+
+param EGO_SPEED = Range(7, 10)
+BYPASS_DIST = [15, 20]
+
+behavior EgoBehavior():
+	try:
+		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED)
+	interrupt when withinDistanceToAnyObjs(self, BYPASS_DIST[0]):
+		fasterLaneSec = self.laneSection.fasterLane
+		do LaneChangeBehavior(
+				laneSectionToSwitch=fasterLaneSec,
+				target_speed=globalParameters.EGO_SPEED)
+		do FollowLaneBehavior(
+				target_speed=globalParameters.EGO_SPEED,
+				laneToFollow=fasterLaneSec.lane) \
+			until (distance to debris) > BYPASS_DIST[1] and (distance to adversary) > BYPASS_DIST[1]
+		slowerLaneSec = self.laneSection.slowerLane
+		do LaneChangeBehavior(
+				laneSectionToSwitch=slowerLaneSec,
+				target_speed=globalParameters.EGO_SPEED)
+		do FollowLaneBehavior(target_speed=globalParameters.EGO_SPEED) 
+
+ego = new Car at egoSpawnPt,
+	with blueprint MODEL,
+	with behavior EgoBehavior()
+
+param ADV_INIT_SPEED = Range(2, 4)
+param ADV_END_SPEED = 2 * Range(7, 10)
+ADV_BUFFER_TIME = 5
+param ADV_DIST = Range(10, 15)
+
+behavior AdversaryBehavior():
+	do FollowLaneBehavior(target_speed=globalParameters.ADV_INIT_SPEED)
+
+adversary = new Car following roadDirection from egoSpawnPt for globalParameters.ADV_DIST,
+	with blueprint MODEL,
+	with behavior AdversaryBehavior()
+
+debris = new Debris at debrisSpawnPt,
+    facing -90 deg relative to debrisSpawnPt.heading,
+    with regionContainedIn None
+
+terminate when (distance from ego to debrisSpawnPt) > 50 and (distance from ego to adversary) > 50
+terminate after 30 seconds
+```
+
+Now output the updated code, do not include any comments or explanations: 

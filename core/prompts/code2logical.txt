@@ -11,8 +11,7 @@ Output ONLY a valid JSON object with the following structure (NO markdown code b
        "<ONE short sentence describing the third adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>"
   ],
   "Spatial Relation": "<ONE short sentence describing the spatial relation of all spatial components with clear subject,  the road type (straight road, highway, intersection), how all entities are positioned relative to each other and the road>",
-  "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for example, if stated in the scenario, how the scenario should be terminated, 
-   what is the initial distance between the ego and the adversarial object, etc. >" 
+  "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for requirement, it is related to what is the initial distance between the ego and the adversarial object or between the ego and the intersection, only the distance relation should be included. For termination, it is related to how the scenario should be terminated>, the requirement could be empty" 
 }}
 
 Follow the rules:
