@@ -11,3 +11,5 @@ uv.lock
 results/
 chatscene_labeled
 Scenic/examples
+
+data/new-structure/
