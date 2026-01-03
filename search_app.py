@@ -54,7 +54,7 @@ class SearchChatbotApp:
             logging.error(f"❌ Error initializing workflow: {error_msg}")
             raise RuntimeError(f"Error happened: {error_msg}")
     
-    def respond_generator(self, message, history, current_code, selected_blueprint=None, selected_map=None, selected_weather=None):
+    def respond_generator(self, message, history, current_code):
         history = history or []
         
         if not message or not message.strip():
@@ -84,10 +84,6 @@ class SearchChatbotApp:
             result = None
             run_func = None
             kwargs = {}
-            
-            kwargs["selected_blueprint"] = selected_blueprint
-            kwargs["selected_map"] = selected_map
-            kwargs["selected_weather"] = selected_weather
             
             if not self.awaiting_confirmation:
                 logging.info(f"📝 Waiting for user confirmation")
@@ -304,30 +300,7 @@ def create_demo():
             with gr.Column(scale=7):
                 chatbot = gr.Chatbot(height=600, label="Conversation", type='messages')
                 
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        blueprint_selector = gr.Dropdown(
-                            choices=blueprints, 
-                            label="Select Blueprint",
-                            value=blueprints[0] if blueprints else None,
-                            interactive=True
-                        )
-                        map_selector = gr.Dropdown(
-                            choices=maps, 
-                            label="Select Map",
-                            value="Town05" if "Town05" in maps else (maps[0] if maps else None),
-                            interactive=True
-                        )
-                        weather_selector = gr.Dropdown(
-                            choices=['ClearNoon', 'CloudyNoon', 'WetNoon', 'WetCloudyNoon', 'SoftRainNoon', 'MidRainyNoon', 'HardRainNoon', 'ClearSunset', 'CloudySunset', 'WetSunset', 'WetCloudySunset', 'SoftRainSunset', 'MidRainSunset', 'HardRainSunset'],
-                            label="Select Weather",
-                            value="ClearNoon",
-                            interactive=True
-                        )
-
-    
-                    with gr.Column(scale=8):
-                        with gr.Row(equal_height=False, elem_classes="center-row"):
+                with gr.Row(equal_height=False, elem_classes="center-row"):
                             msg = gr.Textbox(
                                 show_label=False,
                                 container=False,
@@ -337,16 +310,16 @@ def create_demo():
                             )
                             submit_btn = gr.Button("Send", variant="primary", scale=1)
                         
-                        with gr.Column():
-                            gr.Markdown("### Examples")
-                            example_texts = [
-                                "Ego vehicle is following an adversary vehicle. Adversary suddenly stops.",
-                                "Ego vehicle performs a lane change to bypass a slow adversary.",
-                                "Ego vehicle yields to another vehicle at a four-way intersection."
-                            ]
-                            for text in example_texts:
-                                ex_btn = gr.Button(text, size="sm", variant="secondary")
-                                ex_btn.click(fn=lambda t=text: t, inputs=[], outputs=msg)
+                with gr.Column():
+                    gr.Markdown("### Examples")
+                    example_texts = [
+                        "Ego vehicle is following an adversary vehicle. Adversary suddenly stops.",
+                        "Ego vehicle performs a lane change to bypass a slow adversary.",
+                        "Ego vehicle yields to another vehicle at a four-way intersection."
+                    ]
+                    for text in example_texts:
+                        ex_btn = gr.Button(text, size="sm", variant="secondary")
+                        ex_btn.click(fn=lambda t=text: t, inputs=[], outputs=msg)
 
             with gr.Column(scale=3):
                 log_output = gr.Textbox(
@@ -364,7 +337,7 @@ def create_demo():
                     validate_btn = gr.Button("🔍 Validate Code", variant="secondary")
                     correct_btn = gr.Button("🔧 Auto-Correct", variant="primary")
 
-        input_components = [msg, chatbot, code_display, blueprint_selector, map_selector, weather_selector]
+        input_components = [msg, chatbot, code_display]
         output_components = [msg, chatbot, log_output, code_display]
 
         msg.submit(

@@ -7,9 +7,55 @@ We have a Scenic code needed to be updated:
 Instructions:
 1. Identify and resolve any undefined variables, mismatched object types. 
 2. Extract key scenario parameters(e.g., the speed of ego, distance between ego and adversary and such), analysze the description, Compare these against the provided Scenario Description. If the current values do not satisfy the scenario requirements, adjust variable values to match the scenario description requirements, including distances, speeds, the red light condition, make minimal necessary changes. For example, if the description is bypassing an adversary, while the EGO_SPEED is in Range(10,20), ADV_SPEED is in Range(10,20), and the initial spatial relation is adversary is ahead of ego at distance of Range(15, 25), that means the ego will not able to bypass the adversary anyway, so we need to adjust the EGO_SPEED to be greater than the adversary's speed. 
-3. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors
+3. Do not change the attributes of objects, behaviors, hallucinate the objects, attributes, or behaviors. Do not add new objects, behaviors, attributes, specifiers and new conditions, operators, etc.
 4. Keep ALL other code EXACTLY the same - preserve all indentation, spacing, and THE EXACT ORDER OF ALL CODE SECTIONS (header, spatial relation, ego, adversarials, requirements)
 5. Do not generate comments or explanations, only output the updated code
+
+For example: 
+
+The original code:
+description = "Ego vehicle follows a lead vehicle that suddenly brakes."
+param map = localPath('../../assets/maps/CARLA/Town05.xodr')
+param carla_map = 'Town05'
+model scenic.simulators.carla.model
+MODEL = 'vehicle.audi.a2'
+param weather = 'ClearNoon'
+
+lane = Uniform(*network.lanes)
+egoSpawnPt = new OrientedPoint in lane.centerline
+
+param EGO_SPEED = Range(10, 15)
+param SAFETY_DISTANCE = Range(10, 15)
+
+behavior EgoBehavior(speed, safety_dist):
+    try:
+        do FollowLaneBehavior(target_speed=speed)
+    interrupt when withinDistanceToObjsInLane(self, safety_dist):
+        take SetBrakeAction(1.0)
+
+ego = new Car at egoSpawnPt,
+    with blueprint MODEL,
+    with behavior EgoBehavior(globalParameters.EGO_SPEED, globalParameters.SAFETY_DISTANCE)
+
+param OPT_LEAD_SPEED = Range(10, 12)
+param OPT_BRAKE_TRIGGER_DIST = Range(15, 20)
+
+behavior LeadVehicleBehavior(speed, trigger_dist):
+    do FollowLaneBehavior(target_speed=speed) until (distance from self to ego < trigger_dist)
+    while True:
+        take SetBrakeAction(1.0)
+
+leadVehicle = new Car ahead of ego by Range(20, 30),
+    with behavior LeadVehicleBehavior(globalParameters.OPT_LEAD_SPEED, globalParameters.OPT_BRAKE_TRIGGER_DIST)
+
+require 20 <= (distance from ego to leadVehicle) <= 30
+terminate when leadVehicle.speed < 0.1
+
+Analysis process:
+In this scenario, the key parameters are EGO_SPEED, SAFETY_DISTANCE, OPT_LEAD_SPEED, OPT_BRAKE_TRIGGER_DIST and requirement is 20 <= (distance from ego to leadVehicle) <= 30, terminate condition is leadVehicle.speed < 0.1.
+
+Firstly, we analyze the description, Ego vehicle follows a lead vehicle that suddenly brakes, which means the ego vehicle should be able to follow the lead vehicle and brake when the lead vehicle suddenly brakes. 
+
 
 
 Now output the updated code, do not include any comments or explanations: 
