@@ -64,7 +64,7 @@ class ComponentGeneratorAgent(BaseAgent):
         
         reference_components = self._get_reference_components(user_criteria, component_type)
         
-        documentation = self._get_documentation(component_type)
+        # documentation = self._get_documentation(component_type)
         
         ready_components_str = self._format_ready_components(ready_components)
         
@@ -73,7 +73,7 @@ class ComponentGeneratorAgent(BaseAgent):
             "user_criteria": user_criteria,
             "ready_components": ready_components_str,
             "reference_components": reference_components,
-            "documentation": documentation
+            # "documentation": documentation
         })
         
         self.prompt_template = original_prompt
