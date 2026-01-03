@@ -461,7 +461,7 @@ class SearchWorkflow:
         retrieved_components = state.get("retrieved_components", {})
         processed_components = state.get("processed_components", set())
         
-        if not component_scores or not retrieved_components:
+        if not component_scores:
             return state
         
         processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
@@ -474,21 +474,25 @@ class SearchWorkflow:
         if not unsatisfied_components:
             return state
         
-        component_type = unsatisfied_components[0]
-        score_result = component_scores[component_type]
-        
-        logging.info(f" 🛠️ Processing component: {component_type}")
-        
         component_sources = state.get("component_sources", {})
         
-        if component_type == "Adversarials":
-            self._process_list_component(
-                "Adversarial", "Adversarials", score_result, retrieved_components, component_scores, processed_components, component_sources
-            )
-        else:
-            self._process_single_component(
-                component_type, score_result, retrieved_components, component_scores, processed_components, component_sources
-            )
+        for component_type in unsatisfied_components:
+            if component_type == "Adversarials":
+                if component_type in processed_components:
+                    continue
+                score_result = component_scores[component_type]
+                logging.info(f" 🛠️ Processing component: {component_type}")
+                self._process_list_component(
+                    "Adversarial", "Adversarials", score_result, retrieved_components, component_scores, processed_components, component_sources
+                )
+            else:
+                if component_type in processed_components:
+                    continue
+                score_result = component_scores[component_type]
+                logging.info(f" 🛠️ Processing component: {component_type}")
+                self._process_single_component(
+                    component_type, score_result, retrieved_components, component_scores, processed_components, component_sources
+                )
         
         state["retrieved_components"] = retrieved_components
         state["component_scores"] = component_scores
@@ -506,37 +510,25 @@ class SearchWorkflow:
         
         processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
         
-        unsatisfied_components = [
-            comp for comp in processing_order
-            if comp in component_scores and not component_scores[comp]['is_satisfied']
-        ]
-        
-        remaining_work = False
-        
-        for comp in unsatisfied_components:
-            if comp in ["Adversarials"]:
+        for comp in processing_order:
+            if comp not in component_scores:
+                continue
+                
+            if comp == "Adversarials":
                 score_result = component_scores[comp]
                 individual_scores = score_result.get('individual_scores', [])
                 
                 for i, ind_score in enumerate(individual_scores):
                     item_key = f"{comp}_{i}"
-                    if not ind_score.get('is_satisfied') and item_key not in processed_components:
-                        remaining_work = True
-                        break
+                    if item_key not in processed_components:
+                        logging.info(f"🔄 Component {item_key} not yet processed. Continuing refinement.")
+                        return "continue_refinement"
             else:
-                # For single components
                 if comp not in processed_components:
-                    remaining_work = True
-                    break
-            
-            if remaining_work:
-                break
-
-        if remaining_work:
-            logging.info(f"🔄 There are still {len(unsatisfied_components)} components unsatisfied. Continuing refinement.")
-            return "continue_refinement"
+                    logging.info(f"🔄 Component {comp} not yet processed. Continuing refinement.")
+                    return "continue_refinement"
         
-        logging.info("✅ All components processed (or satisfied)")
+        logging.info("✅ All components processed")
         return "done"
     
     def _process_list_component(self, component_name: str, component_type: str, 
