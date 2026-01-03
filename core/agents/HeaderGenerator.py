@@ -18,7 +18,7 @@ class HeaderGeneratorAgent(BaseAgent):
         self,
         user_query: str,
         carla_map: str = "Town05",
-        blueprint: str = "vehicle.audi.a2",
+        blueprint: str = "vehicle.lincoln.mkz_2017",
         weather: str = "ClearNoon"
     ) -> Dict[str, Any]:
         return self.generate_header(user_query, carla_map, blueprint, weather)
