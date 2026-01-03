@@ -4,15 +4,47 @@ Output ONLY a valid JSON object with the following structure (NO markdown code b
 
 {{
   "Scenario": "<ONE short sentence describing the main event>",
-  "Ego": "<ONE short sentence describing the ego vehicle including its type (restricted to car, pedestrian) and behavior>",
+  "Ego": "<ONE short sentence describing the ego vehicle including its type (restricted to car) and behavior>",
   "Adversarials": [
-      "<ONE short sentence describing the first adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
-       "<ONE short sentence describing the second adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>",
-       "<ONE short sentence describing the third adversarial object including its type (restricted to pedestrian, car, trash, debris, vending machine, bicycle, truck, etc.) and behavior>"
+      "<ONE short sentence describing the first adversarial object including its type and behavior>",
+      "<ONE short sentence describing the second adversarial object including its type and behavior>",
+      "<ONE short sentence describing the third adversarial object including its type and behavior>"
   ],
   "Spatial Relation": "<ONE short sentence describing the spatial relation of all spatial components with clear subject,  the road type (straight road, highway, intersection), how all entities are positioned relative to each other and the road>",
   "Requirement and restrictions": "<Describe the requirement and restrictions of the scenario, for requirement, it is related to what is the initial distance between the ego and the adversarial object or between the ego and the intersection, only the distance relation should be included. For termination, it is related to how the scenario should be terminated>, the requirement could be empty" 
 }}
+
+Adversarial types includes:
+- Car
+- NPCCar
+- Bicycle
+- Motorcycle
+- Truck
+- Pedestrian
+- Prop
+- Trash
+- Cone
+- Debris
+- VendingMachine
+- Chair
+- BusStop
+- Advertisement
+- Garbage
+- Container
+- Table
+- Barrier
+- PlantPot
+- Mailbox
+- Gnome
+- CreasedBox
+- Case
+- Box
+- Bench
+- Barrel
+- ATM
+- Kiosk
+- IronPlate
+- TrafficWarning
 
 Follow the rules:
  - Do not contain spatial relation in egos and adversarials components
