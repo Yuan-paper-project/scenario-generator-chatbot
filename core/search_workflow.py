@@ -14,6 +14,7 @@ from .agents.component_generator_agent import ComponentGeneratorAgent
 from .agents.CodeValidator import CodeValidator
 from .agents.ErrorCorrector import ErrorCorrector
 from .agents.HeaderGenerator import HeaderGeneratorAgent
+from .agents.settings_detector_agent import SettingsDetectorAgent
 from .config import get_settings
 from .scenario_milvus_client import ScenarioMilvusClient
 from utilities.parser import parse_json_from_text
@@ -58,6 +59,7 @@ class SearchWorkflow:
         self.code_validator = CodeValidator()
         self.error_corrector = ErrorCorrector()
         self.header_generator = HeaderGeneratorAgent()
+        self.settings_detector = SettingsDetectorAgent()
         self.generation_threshold = 50
         
         try:
@@ -70,6 +72,7 @@ class SearchWorkflow:
         self.workflow.add_node("interpret_query", self._interpret_query_node)
         self.workflow.add_node("handle_feedback", self._handle_feedback_node)
         self.workflow.add_node("detect_settings", self._detect_settings_node)
+        self.workflow.add_node("generate_header", self._generate_header_node)
         self.workflow.add_node("search_scenario", self._search_scenario_node)
         self.workflow.add_node("score_components", self._score_components_node)
         self.workflow.add_node("search_snippets", self._search_snippets_node)
@@ -83,7 +86,7 @@ class SearchWorkflow:
             {
                 "interpret": "interpret_query",
                 "feedback": "handle_feedback",
-                "search": "search_scenario",
+                "search": "detect_settings",
                 "validate": "validate_code"
             }
         )
@@ -106,7 +109,8 @@ class SearchWorkflow:
             }
         )
         
-        self.workflow.add_edge("detect_settings", "search_scenario")
+        self.workflow.add_edge("detect_settings", "generate_header")
+        self.workflow.add_edge("generate_header", "search_scenario")
         self.workflow.add_edge("search_scenario", "score_components")
         
         self.workflow.add_conditional_edges(
@@ -464,7 +468,7 @@ class SearchWorkflow:
         if not component_scores:
             return state
         
-        processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        processing_order = ["Spatial Relation", "Ego", "Adversarials", "Requirement and restrictions"]
         
         unsatisfied_components = [
             comp for comp in processing_order
@@ -508,7 +512,7 @@ class SearchWorkflow:
         if not component_scores:
             return "done"
         
-        processing_order = ["Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        processing_order = ["Spatial Relation", "Ego", "Adversarials", "Requirement and restrictions"]
         
         for comp in processing_order:
             if comp not in component_scores:
@@ -673,7 +677,7 @@ class SearchWorkflow:
         return best_candidate, best_score
     
     def _build_ready_components(self, retrieved_components: dict, component_scores: dict, current_component: str) -> dict:
-        processing_order = ["Header", "Ego", "Adversarials", "Spatial Relation", "Requirement and restrictions"]
+        processing_order = ["Header", "Spatial Relation", "Ego", "Adversarials", "Requirement and restrictions"]
         ready_components = {}
         
         for comp_type in processing_order:
@@ -755,9 +759,9 @@ class SearchWorkflow:
             else:
                 if isinstance(comp_data, dict) and comp_data.get("code"):
                     code_parts.append(comp_data.get("code", ""))
-                    logging.info(f"✅ Added {component_type} code ")
+                    logging.info(f"✅ Added {component_type} code")
                 else:
-                    logging.info(f"⚠️ Component {component_type} has no code: {comp_data}")
+                    logging.info(f"⚠️ Component {component_type} has no code. Type: {type(comp_data)}, Keys: {comp_data.keys() if isinstance(comp_data, dict) else 'N/A'}")
         
         final_code = "\n\n".join(code_parts)
         
@@ -810,7 +814,7 @@ class SearchWorkflow:
         selected_blueprint = state.get("selected_blueprint")
         selected_weather = state.get("selected_weather")
         
-        if not selected_map or not selected_weather:
+        if not selected_map or not selected_weather or not selected_blueprint:
             logging.info(f"🔍 Auto-detecting settings from user query...")
             detected_settings = self.settings_detector.detect_settings(user_query)
             
@@ -823,6 +827,11 @@ class SearchWorkflow:
                 if not selected_map and detected_settings["suggested_map"]:
                     selected_map = detected_settings["suggested_map"]
                     logging.info(f"🗺️ Auto-detected map: {selected_map} (confidence: {detected_settings['confidence']:.2f})")
+                    logging.info(f"   Reasoning: {detected_settings['reasoning']}")
+
+                if not selected_blueprint and detected_settings["blueprint"]:
+                    selected_blueprint = detected_settings["blueprint"]
+                    logging.info(f"🚗 Auto-detected blueprint: {selected_blueprint} (confidence: {detected_settings['confidence']:.2f})")
                     logging.info(f"   Reasoning: {detected_settings['reasoning']}")
             else:
                 logging.info(f"⚠️ Low confidence ({detected_settings['confidence']:.2f}) in auto-detection, using defaults")
@@ -840,6 +849,21 @@ class SearchWorkflow:
         state["selected_map"] = selected_map
         state["selected_blueprint"] = selected_blueprint
         state["selected_weather"] = selected_weather
+        
+        return state
+    
+    def _generate_header_node(self, state: SearchWorkflowState):
+        
+        agent_logger = get_agent_logger()
+        if agent_logger:
+            agent_logger.log_workflow_event("node_entry", {
+                "node": "generate_header"
+            })
+        
+        user_query = state.get("user_query", "")
+        selected_map = state.get("selected_map", "Town05")
+        selected_blueprint = state.get("selected_blueprint", "vehicle.lincoln.mkz_2017")
+        selected_weather = state.get("selected_weather", "ClearNoon")
         
         logging.info(f"🎨 Generating Header component")
         header_component = self.header_generator.generate_header(
