@@ -15,6 +15,10 @@ class SettingsDetectorAgent(BaseAgent):
             use_rag=False
         )
     
+    def process(self, **kwargs) -> Dict[str, Any]:
+        user_query = kwargs.get("user_query", "")
+        return self.detect_settings(user_query)
+    
     def detect_settings(self, user_query: str) -> Dict[str, Any]:
         response = self.invoke(context={
             "user_query": user_query
@@ -39,6 +43,7 @@ class SettingsDetectorAgent(BaseAgent):
                 "map_type": result.get("map_type"),
                 "suggested_map": result.get("suggested_map"),
                 "time_of_day": result.get("time_of_day"),
+                "blueprint": result.get("blueprint"),
                 "confidence": result.get("confidence", 0.5),
                 "reasoning": result.get("reasoning", "")
             }
@@ -58,6 +63,7 @@ class SettingsDetectorAgent(BaseAgent):
             "map_type": None,
             "suggested_map": None,
             "time_of_day": None,
+            "blueprint": None,
             "confidence": 0.0,
             "reasoning": "Detection failed, using defaults"
         }

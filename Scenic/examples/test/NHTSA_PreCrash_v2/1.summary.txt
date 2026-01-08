@@ -1,0 +1,14 @@
+scenario_001.scenic: success
+scenario_002.scenic: success
+scenario_003.scenic: success
+scenario_004.scenic: success
+scenario_005.scenic: success
+scenario_006.scenic: success
+
+scenario_009.scenic: failure, wait 1 second
+scenario_016.scenic: success
+scenario_030.scenic: failure to generate 
+scenario_033.scenic: success
+scenario_034.scenic: success, no collision
+scenario_035.scenic: success, with collision
+scenario_036.scenic: success
