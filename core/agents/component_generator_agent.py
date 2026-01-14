@@ -14,7 +14,7 @@ class ComponentGeneratorAgent(BaseAgent):
             model_name="gemini-3-flash-preview", 
             model_provider="google_genai",
             use_rag=False,
-            think_mode=True
+            think_mode=False
         )
         
         self.prompts = {

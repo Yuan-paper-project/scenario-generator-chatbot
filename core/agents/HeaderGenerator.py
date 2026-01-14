@@ -30,8 +30,7 @@ class HeaderGeneratorAgent(BaseAgent):
         blueprint: str,
         weather: str
     ) -> Dict[str, Any]:
-        map_file_path = f"../../assets/maps/CARLA/{carla_map}.xodr"
-        
+        map_file_path = f"../../maps/{carla_map}.xodr"
         response = self.invoke(context={
             "user_query": user_query,
             "carla_map": carla_map,

@@ -40,8 +40,8 @@ Detection Rules:
    - "wet", "damp" (without active rain) → WetNoon/WetSunset
 
 2. Time keywords:
-   - "noon", "midday", "daytime", "afternoon" → Noon
-   - "sunset", "dusk", "evening", "twilight" → Sunset
+   - "noon", "midday", "daytime", "afternoon" or other daytime-related keywords → Noon
+   - "sunset", "dusk", "evening", "twilight", "night" or other night-related keywords → Sunset
    - Default to Noon if not specified
 
 3. Map keywords:
