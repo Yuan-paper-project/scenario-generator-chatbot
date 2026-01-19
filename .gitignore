@@ -10,6 +10,10 @@ uv.lock
 .env
 results/
 chatscene_labeled
-Scenic/examples
-
+Scenic/
+videos/
 data/new-structure/
+
+Scenario/
+Benchmark_gemini/
+Benchmark_GPT5.2/

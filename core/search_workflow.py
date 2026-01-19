@@ -545,6 +545,9 @@ class SearchWorkflow:
         user_criteria_list = score_result.get('user_criteria', [])
         current_list = retrieved_components.get(component_type, [])
         
+        if component_type not in retrieved_components:
+            retrieved_components[component_type] = current_list
+
         for i, (ind_score, user_criteria) in enumerate(zip(individual_scores, user_criteria_list)):
             item_key = f"{component_type}_{i}"
             
@@ -553,10 +556,15 @@ class SearchWorkflow:
             
             processed_components.add(item_key)
             
+  
+            context_list = current_list[:i]
+            temp_retrieved = retrieved_components.copy()
+            temp_retrieved[component_type] = context_list
+
             # Always generate new component
             logging.info(f"🛠️ Generating new {component_name} {i+1}")
             generated = self._generate_component(
-                component_name, user_criteria, retrieved_components, component_scores
+                component_name, user_criteria, temp_retrieved, component_scores
             )
             
             if generated:
@@ -567,6 +575,9 @@ class SearchWorkflow:
                 individual_scores[i] = generated['score_result']
                 component_sources[item_key] = "GENERATED"
                 logging.info(f"✅ Generated {component_name} {i+1}")
+                
+     
+                retrieved_components[component_type] = current_list
         
         retrieved_components[component_type] = current_list
         avg_score = sum(s["score"] for s in individual_scores) / len(individual_scores) if individual_scores else 0

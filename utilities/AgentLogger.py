@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 class AgentLogger:
-    def __init__(self, generation_id: Optional[str] = None, user_query: Optional[str] = None):
+    def __init__(self, generation_id: Optional[str] = None, user_query: Optional[str] = None, base_dir: Optional[str] = None):
         if generation_id:
             self.generation_id = generation_id
         else:
@@ -21,7 +21,9 @@ class AgentLogger:
             else:
                 self.generation_id = f"{date_str}_{random_num}_unknown"
         
-        self.results_dir = Path("results") / self.generation_id
+        # Use provided base_dir or default to "results"
+        root_dir = Path(base_dir) if base_dir else Path("results")
+        self.results_dir = root_dir / self.generation_id
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
         self.invocation_counter = {}
