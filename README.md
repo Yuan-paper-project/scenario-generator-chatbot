@@ -40,7 +40,13 @@ source .venv/bin/activate     # macOS/Linux
 uv pip install -r pyproject.toml
 ```
 
-### 2. Vector Database Setup
+### 2. Install Scenic (Scenic DSL)
+
+Install Scenic inside the same virtual environment (recommended). See the official install notes for platform-specific troubleshooting:
+https://docs.scenic-lang.org/en/latest/install_notes.html
+
+
+### 3. Vector Database Setup
 
 The project uses Milvus as the vector database. Set up using Docker:
 
@@ -59,7 +65,7 @@ docker run -d --name attu --network rag-net \
     zilliz/attu:latest
 ```
 
-### 3. Configure Environment
+### 4. Configure Environment
 
 Create a `.env` file in the project root with your API keys:
 
@@ -78,7 +84,7 @@ MILVUS_COLLECTION=gemini
 
 Additional settings can be configured in `core/config.py`.
 
-### 4. Running the Application
+### 5. Running the Application
 
 Start the Gradio web interface:
 

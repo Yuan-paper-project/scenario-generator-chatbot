@@ -15,5 +15,5 @@ videos/
 data/new-structure/
 
 Scenario/
-Benchmark_gemini/
-Benchmark_GPT5.2/
+Benchmark*/
+evaluation*/
