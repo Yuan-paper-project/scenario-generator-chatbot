@@ -5,7 +5,7 @@ import torch
 import sys
 import traceback
 import concurrent.futures
-from core.search_workflow import SearchWorkflow
+from core.workflow import SearchWorkflow
 from core.config import get_settings
 from utilities.QueueHandler import QueueHandler
 from utilities.carla_utils import get_carla_blueprints, get_carla_maps
