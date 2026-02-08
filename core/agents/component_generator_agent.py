@@ -1,4 +1,6 @@
 import json
+import re
+import logging
 from typing import Dict, Any, List
 from .base import BaseAgent
 from core.prompts import load_prompt
@@ -11,8 +13,8 @@ class ComponentGeneratorAgent(BaseAgent):
         prompt = load_prompt("component_generator")
         super().__init__(
             prompt_template=prompt,
-            model_name="gemini-3-flash-preview", 
-            model_provider="google_genai",
+            # model_name="gemini-3-flash-preview", 
+            # model_provider="google_genai",
             use_rag=False,
             think_mode=False
         )
@@ -82,44 +84,34 @@ class ComponentGeneratorAgent(BaseAgent):
         try:
             response_text = response.strip()
             
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            elif response_text.startswith("```"):
-                response_text = response_text[3:]
+            # 1. Try to extract code from code blocks if any (just in case)
+            code_match = re.search(r"```(?:scenic|python)?\n?(.*?)```", response_text, re.DOTALL)
+            code = code_match.group(1).strip() if code_match else response_text.strip()
             
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
+            # 2. Basic cleaning - if it starts/ends with quotes or seems like a single string
+            if (code.startswith('"') and code.endswith('"')) or (code.startswith("'") and code.endswith("'")):
+                code = code[1:-1].strip()
+
             
-            response_text = response_text.strip()
+            if code:
+                return {
+                    "code": code,
+                    "description": f"Generated {component_type}",
+                    "is_generated": True,
+                    "scenario_id": "GENERATED"
+                }
+            else: 
+                logging.warning(f"No code found in response. Response content: {response_text}")
+                return {
+                    "code": response_text,
+                    "description": f"Generated {component_type}",
+                    "is_generated": True,
+                    "scenario_id": "GENERATED"
+                }
+
             
-            result = json.loads(response_text)
-            
-            # Validate required fields
-            required_fields = ["code", "description"]
-            for field in required_fields:
-                if field not in result:
-                    raise ValueError(f"Missing required field: {field}")
-            
-            
-            return {
-                "code": result["code"],
-                "description": result["description"],
-                "is_generated": True,  # Flag to indicate this was generated, not retrieved
-                "scenario_id": "GENERATED"  # Special marker for generated components
-            }
-            
-        except json.JSONDecodeError as e:
-            print(f"[ERROR] Failed to parse generation response as JSON: {e}")
-            print(f"[DEBUG] Response text: {response_text[:500]}...")
-            
-            return {
-                "code": "",
-                "description": "Failed to generate component",
-                "is_generated": False,
-                "scenario_id": "ERROR"
-            }
         except Exception as e:
-            print(f"[ERROR] Unexpected error in generate_component: {e}")
+            logging.error(f"[ERROR] Unexpected error in generate_component: {e}")
             return {
                 "code": "",
                 "description": "Failed to generate component",
@@ -129,16 +121,16 @@ class ComponentGeneratorAgent(BaseAgent):
     
     def _get_prompt_key(self, component_type: str) -> str:
         component_type_lower = component_type.lower()
-        if component_type_lower == "ego":
+        if "ego" in component_type_lower:
             return "ego"
         
-        if component_type_lower == "adversarial":
+        if "adversarial" in component_type_lower:
             return "adv"
         
-        if component_type_lower == "spatial relation":
+        if "spatial" in component_type_lower:
             return "spatial"
         
-        if component_type_lower == "requirement and restrictions":
+        if "requirement" in component_type_lower:
             return "requirement"
         
         return "default"
