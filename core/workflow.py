@@ -30,9 +30,7 @@ class SearchWorkflowState(TypedDict):
     workflow_status: str
     component_scores: dict
     retrieved_components: dict
-    selected_blueprint: str
-    selected_map: str
-    selected_weather: str
+    scenario_settings: dict
     generation_start_time: float
     component_sources: dict
     generation_time: str
@@ -448,11 +446,16 @@ class SearchWorkflow:
         
         if "Header" not in state["retrieved_components"]:
             state["retrieved_components"]["Header"] = {}
+
+        if "scenario_settings" not in state or state["scenario_settings"] is None:
+            state["scenario_settings"] = {}
         
         user_query = state.get("user_query", "")
-        selected_map = state.get("selected_map")
-        selected_blueprint = state.get("selected_blueprint")
-        selected_weather = state.get("selected_weather")
+        selected_map = state["scenario_settings"].get("selected_map")
+        selected_blueprint = state["scenario_settings"].get("selected_blueprint")
+        selected_weather = state["scenario_settings"].get("selected_weather")
+
+        detected_settings = None
         
         if not selected_map or not selected_weather or not selected_blueprint:
             logging.info(f"🔍 Auto-detecting settings from user query...")
@@ -485,10 +488,14 @@ class SearchWorkflow:
         if not selected_blueprint:
             selected_blueprint = "vehicle.lincoln.mkz_2017"
             logging.info(f"🚗 Using default blueprint: {selected_blueprint}")
-        
-        state["selected_map"] = selected_map
-        state["selected_blueprint"] = selected_blueprint
-        state["selected_weather"] = selected_weather
+
+        state["scenario_settings"].update({
+            "selected_map": selected_map,
+            "selected_weather": selected_weather,
+            "selected_blueprint": selected_blueprint,
+            # Full detector payload (confidence, reasoning, suggestions, etc.)
+            # "detected_settings": detected_settings,
+        })
         
         return state
     
@@ -501,9 +508,10 @@ class SearchWorkflow:
             })
         
         user_query = state.get("user_query", "")
-        selected_map = state.get("selected_map", "Town05")
-        selected_blueprint = state.get("selected_blueprint", "vehicle.lincoln.mkz_2017")
-        selected_weather = state.get("selected_weather", "ClearNoon")
+        scenario_settings = state.get("scenario_settings", {}) or {}
+        selected_map = scenario_settings.get("selected_map") or "Town05"
+        selected_blueprint = scenario_settings.get("selected_blueprint") or "vehicle.lincoln.mkz_2017"
+        selected_weather = scenario_settings.get("selected_weather") or "ClearNoon"
         
         logging.info(f"🎨 Generating Header component")
         header_component = self.header_generator.generate_header(
@@ -592,18 +600,21 @@ class SearchWorkflow:
                 "workflow_status": "",
                 "component_scores": {},
                 "retrieved_components": {},
-                "selected_blueprint": None,
-                "selected_map": None,
-                "selected_weather": None,
+                "scenario_settings": {},
                 "component_sources": {},
                 "generation_start_time": None,
                 "generation_time": "",
                 "generation_duration": 0.0
             }
-        
-        if selected_blueprint: state["selected_blueprint"] = selected_blueprint
-        if selected_map: state["selected_map"] = selected_map
-        if selected_weather: state["selected_weather"] = selected_weather
+
+        # Store explicit selections (if provided) into canonical scenario_settings.
+        state.setdefault("scenario_settings", {})
+        if selected_blueprint:
+            state["scenario_settings"]["selected_blueprint"] = selected_blueprint
+        if selected_map:
+            state["scenario_settings"]["selected_map"] = selected_map
+        if selected_weather:
+            state["scenario_settings"]["selected_weather"] = selected_weather
         
         # Validation/auto-correction is intentionally disabled in this workflow.
         if validate_only and code_to_validate:
@@ -635,6 +646,7 @@ class SearchWorkflow:
             state["retrieved_components"] = {}
             state["component_sources"] = {}
             state["generation_start_time"] = None
+            state["scenario_settings"] = {}
             
             state["messages"].append(HumanMessage(content=user_input))
             
