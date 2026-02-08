@@ -37,7 +37,10 @@ class Settings(BaseSettings):
     # keys
     OPENAI_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
+    DEEPSEEK_API_KEY: str | None = None
+    QWEN_API_KEY: str | None = None
 
+    
     #  LLM Response Parameters
     LLM_PROVIDER: str = "google_genai"  # "ollama" or "openai" or "google_genai"
     LLM_TEMPERATURE: float = 0.7  # Controls creativity/randomness (0.0-1.0)

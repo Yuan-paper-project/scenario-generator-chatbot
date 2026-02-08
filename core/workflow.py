@@ -11,7 +11,6 @@ from .agents.Interpretor import Interpretor
 from .agents.component_scoring_agent import ComponentScoringAgent
 from .agents.component_assembler_agent import ComponentAssemblerAgent
 from .agents.component_generator_agent import ComponentGeneratorAgent
-from .agents.CodeValidator import CodeValidator
 from .agents.ErrorCorrector import ErrorCorrector
 from .agents.HeaderGenerator import HeaderGeneratorAgent
 from .agents.settings_detector_agent import SettingsDetectorAgent
@@ -58,7 +57,6 @@ class SearchWorkflow:
         self.scoring_agent = ComponentScoringAgent()
         self.assembler_agent = ComponentAssemblerAgent()
         self.generator_agent = ComponentGeneratorAgent() 
-        self.code_validator = CodeValidator()
         self.error_corrector = ErrorCorrector()
         self.header_generator = HeaderGeneratorAgent()
         self.settings_detector = SettingsDetectorAgent()
@@ -182,7 +180,7 @@ class SearchWorkflow:
                 "user_query": state.get("user_query", "")
             })
         
-        logical_interpretation = self.code2logical.process(state["user_query"])
+        logical_interpretation = self.interpretor.process(state["user_query"])
         
         formatted_response = (
             f"**Logical Scenario Structure:**\n{logical_interpretation}\n\n"
@@ -211,7 +209,7 @@ class SearchWorkflow:
                 "user_feedback": state.get("user_feedback", "")
             })
         
-        updated_interpretation = self.code2logical.adapt(
+        updated_interpretation = self.interpretor.adapt(
             state.get("user_query", ""),
             state.get("logical_interpretation", ""),
             state.get("user_feedback", "")

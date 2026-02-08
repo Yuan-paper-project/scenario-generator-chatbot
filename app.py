@@ -146,117 +146,6 @@ class SearchChatbotApp:
             history[-1] = {"role": "assistant", "content": f"Error: {error_msg}"}
             yield "", history, log_queue.get_logs(), current_code
 
-    def validate_only_generator(self, code_content, history):
-        history = history or []
-        
-        if not code_content or not code_content.strip():
-             logging.warning("Validation requested but no code provided.")
-             yield history, log_queue.get_logs(), code_content
-             return
-
-        history.append({"role": "user", "content": "(User requested validation)"})
-        history.append({"role": "assistant", "content": "⏳ **Validating...**"})
-        yield history, log_queue.get_logs(), code_content
-
-        try:
-            if not self.workflow:
-                 self.initialize_workflow()
-            
-            reset_agent_logger()
-            self.generation_counter += 1
-            self.agent_logger = initialize_agent_logger(session_id=f"validation_{self.generation_counter:03d}")
-            
-            logging.info(f"🚀Validation started")
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content, auto_correction=False)
-                
-                while not future.done():
-                    yield history, log_queue.get_logs(), code_content
-                    time.sleep(0.1)
-                
-                result = future.result()
-            
-            response_content = ""
-            new_code = code_content
-
-            if result:
-                response_content = result.get("messages", [])[-1].content
-                corrected_code = result.get("adapted_code", "")
-                if corrected_code:
-                    new_code = corrected_code
-                logging.info("✅ Validation completed")
-                
-                if self.agent_logger:
-                    self.agent_logger.write_summary()
-                    logging.info(f"📊 Validation logs saved to: {self.agent_logger.results_dir}")
-
-            history[-1] = {"role": "assistant", "content": response_content}
-            
-            yield history, log_queue.get_logs(), new_code
-
-        except Exception as e:
-            error_msg = f"Validation Error: {str(e)}"
-            logging.error(f"❌ {error_msg}")
-            traceback.print_exc()
-            history[-1] = {"role": "assistant", "content": error_msg}
-            yield history, log_queue.get_logs(), code_content
-
-    def auto_correct_generator(self, code_content, history):
-        history = history or []
-        
-        if not code_content or not code_content.strip():
-             logging.warning("Auto-correction requested but no code provided.")
-             yield history, log_queue.get_logs(), code_content
-             return
-
-        history.append({"role": "user", "content": "(User requested auto-correction)"})
-        history.append({"role": "assistant", "content": "⏳ **Validating and Correcting...**"})
-        yield history, log_queue.get_logs(), code_content
-
-        try:
-            if not self.workflow:
-                 self.initialize_workflow()
-            
-            reset_agent_logger()
-            self.generation_counter += 1
-            self.agent_logger = initialize_agent_logger(session_id=f"autocorrect_{self.generation_counter:03d}")
-            
-            logging.info(f"🚀 Auto-correction started")
-            
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self.workflow.run, validate_only=True, code_to_validate=code_content, auto_correction=True)
-                
-                while not future.done():
-                    yield history, log_queue.get_logs(), code_content
-                    time.sleep(0.1)
-                
-                result = future.result()
-            
-            response_content = ""
-            new_code = code_content
-            if result:
-                response_content = result.get("messages", [])[-1].content
-                corrected_code = result.get("adapted_code", "")
-                if corrected_code:
-                    new_code = corrected_code
-                logging.info("✅ Auto-correction completed")
-                
-                if self.agent_logger:
-                    self.agent_logger.write_summary()
-                    logging.info(f"📊 Auto-correction logs saved to: {self.agent_logger.results_dir}")
-            
-            history[-1] = {"role": "assistant", "content": response_content}
-            
-            yield history, log_queue.get_logs(), new_code
-
-        except Exception as e:
-            error_msg = f"Auto-correction Error: {str(e)}"
-            logging.error(f"❌ {error_msg}")
-            traceback.print_exc()
-            history[-1] = {"role": "assistant", "content": error_msg}
-            yield history, log_queue.get_logs(), code_content
-
     def close(self):
         logging.info("🧹 Close the application")
         
@@ -333,9 +222,6 @@ def create_demo():
                     language="python",
                     interactive=True
                 )
-                with gr.Row():
-                    validate_btn = gr.Button("🔍 Validate Code", variant="secondary")
-                    correct_btn = gr.Button("🔧 Auto-Correct", variant="primary")
 
         input_components = [msg, chatbot, code_display]
         output_components = [msg, chatbot, log_output, code_display]
@@ -350,18 +236,6 @@ def create_demo():
             app.respond_generator, 
             inputs=input_components, 
             outputs=output_components
-        )
-        
-        validate_btn.click(
-            app.validate_only_generator,
-            inputs=[code_display, chatbot],
-            outputs=[chatbot, log_output, code_display]
-        )
-        
-        correct_btn.click(
-            app.auto_correct_generator,
-            inputs=[code_display, chatbot],
-            outputs=[chatbot, log_output, code_display]
         )
 
     return demo, app
